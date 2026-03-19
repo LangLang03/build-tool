@@ -271,12 +271,12 @@ cache_get_stats() {
         hit_rate=$((CACHE_HIT_COUNT * 100 / total))
     fi
     
-    echo "Cache Statistics:"
-    echo "  Hits:       $CACHE_HIT_COUNT"
-    echo "  Misses:     $CACHE_MISS_COUNT"
-    echo "  Hit Rate:   ${hit_rate}%"
-    echo "  Entries:    $(cache_get_entry_count)"
-    echo "  Size:       $(file_size_human "$CACHE_DIR/files")"
+    echo "$(i18n_get "cache_statistics")"
+    echo "  $(i18n_get "hits"):       $CACHE_HIT_COUNT"
+    echo "  $(i18n_get "misses"):     $CACHE_MISS_COUNT"
+    echo "  $(i18n_get "hit_rate"):   ${hit_rate}%"
+    echo "  $(i18n_get "entries"):    $(cache_get_entry_count)"
+    echo "  $(i18n_get "size"):       $(file_size_human "$CACHE_DIR/files")"
 }
 
 cache_load_stats() {

@@ -53,7 +53,7 @@ load_project_config() {
         
         cd "$PROJECT_DIR"
         
-        output_debug "Loading project config: $config_file"
+        output_debug "$(i18n_get "loading_project_config")"
         
         local ext="${config_file##*.}"
         
@@ -62,7 +62,7 @@ load_project_config() {
                 if yaml_check_yq; then
                     yaml_load_config "$config_file"
                 else
-                    output_warning "yq not found, skipping YAML config"
+                    output_warning "$(i18n_get "yq_not_found")"
                     return 1
                 fi
                 ;;
@@ -70,7 +70,7 @@ load_project_config() {
                 source "$config_file"
                 ;;
             *)
-                output_warning "Unknown config format: $ext"
+                output_warning "$(i18n_get "unknown_config_format")"
                 return 1
                 ;;
         esac
@@ -94,7 +94,7 @@ load_project_config() {
             config_set "BUILD_DIR" "$BUILD_DIR"
         fi
         
-        output_debug "Project: $PROJECT_NAME v$PROJECT_VERSION"
+        output_debug "$(i18n_get "project") $PROJECT_NAME v$PROJECT_VERSION"
         return 0
     fi
     
@@ -163,13 +163,13 @@ show_config() {
     if [[ -n "$PROJECT_CONFIG_FILE" ]]; then
         output_section "Project"
         output_key_value "Config File" "$PROJECT_CONFIG_FILE" 15
-        output_key_value "Project Name" "$PROJECT_NAME" 15
-        output_key_value "Project Version" "$PROJECT_VERSION" 15
-        output_key_value "Project Dir" "$PROJECT_DIR" 15
+        output_key_value "$(i18n_get "project")" "$PROJECT_NAME" 15
+        output_key_value "$(i18n_get "version")" "$PROJECT_VERSION" 15
+        output_key_value "$(i18n_get "project_dir")" "$PROJECT_DIR" 15
     fi
     
     output_section "$(i18n_get "platform_section")"
-    output_key_value "OS" "$PLATFORM_OS" 15
+    output_key_value "$(i18n_get "os")" "$PLATFORM_OS" 15
     output_key_value "$(i18n_get "distribution")" "$PLATFORM_DISTRO" 15
     output_key_value "$(i18n_get "architecture")" "$PLATFORM_ARCH" 15
     output_key_value "$(i18n_get "package_manager")" "${PLATFORM_PACKAGE_MANAGER:-none}" 15
@@ -179,7 +179,7 @@ show_config() {
     output_key_value "$(i18n_get "quiet")" "$(config_get QUIET)" 15
     output_key_value "$(i18n_get "no_color")" "$(config_get COLOR)" 15
     output_key_value "$(i18n_get "jobs")" "$(config_get PARALLEL)" 15
-    output_key_value "Jobs" "$(config_get JOBS)" 15
+    output_key_value "$(i18n_get "jobs")" "$(config_get JOBS)" 15
     output_key_value "$(i18n_get "no_cache")" "$(config_get INCREMENTAL)" 15
     
     output_section "$(i18n_get "directories")"
@@ -194,7 +194,7 @@ check_environment() {
     local issues=0
     
     output_section "$(i18n_get "system")"
-    output_key_value "OS" "$PLATFORM_OS" 15
+    output_key_value "$(i18n_get "os")" "$PLATFORM_OS" 15
     output_key_value "$(i18n_get "distribution")" "$PLATFORM_DISTRO" 15
     output_key_value "$(i18n_get "architecture")" "$PLATFORM_ARCH" 15
     output_key_value "$(i18n_get "root")" "$PLATFORM_IS_ROOT" 15
@@ -210,6 +210,7 @@ check_environment() {
     
     output_section "$(i18n_get "required_tools")"
     local required_tools=("bash" "cat" "mkdir" "rm" "cp" "mv")
+    local tool
     for tool in "${required_tools[@]}"; do
         if command_exists "$tool"; then
             output_success "$(i18n_get "tool_available")"
@@ -250,7 +251,7 @@ handle_plugin_command() {
             ;;
         create|new)
             if [[ -z "${1:-}" ]]; then
-                output_error "Plugin name required"
+                output_error "$(i18n_get "plugin_name_required")"
                 return 1
             fi
             plugin_create "$1" "${2:-plugins}"
@@ -286,8 +287,8 @@ handle_plugin_command() {
             fi
             ;;
         *)
-            output_error "Unknown plugin command: $subcommand"
-            echo "Available: list, create, validate, deps, install-deps"
+            output_error "$(i18n_get "unknown_plugin_command")"
+            echo "$(i18n_get "plugin_commands_available")"
             return 1
             ;;
     esac
@@ -302,26 +303,26 @@ handle_cache_command() {
             cache_get_stats
             ;;
         clear|clean)
-            output_info "Clearing cache..."
+            output_info "$(i18n_get "clearing_cache")"
             cache_clear
-            output_success "Cache cleared"
+            output_success "$(i18n_get "cache_cleared")"
             ;;
         enable)
             cache_enable
-            output_success "Cache enabled"
+            output_success "$(i18n_get "cache_enabled")"
             ;;
         disable)
             cache_disable
-            output_success "Cache disabled"
+            output_success "$(i18n_get "cache_disabled")"
             ;;
         cleanup)
-            output_info "Cleaning expired and oversized cache entries..."
+            output_info "$(i18n_get "cleaning_cache")"
             cache_cleanup
-            output_success "Cache cleanup completed"
+            output_success "$(i18n_get "cache_cleanup_completed")"
             ;;
         *)
-            output_error "Unknown cache command: $subcommand"
-            echo "Available: stats, clear, enable, disable, cleanup"
+            output_error "$(i18n_get "unknown_cache_command")"
+            echo "$(i18n_get "cache_commands_available")"
             return 1
             ;;
     esac
@@ -383,8 +384,8 @@ parse_options() {
                 break
                 ;;
             -*)
-                output_error "Unknown option: $1"
-                echo "Use 'build help' for usage information"
+                output_error "$(i18n_get "unknown_option")"
+                echo "$(i18n_get "use_help_for_usage")"
                 exit 1
                 ;;
             *)
@@ -426,8 +427,8 @@ main() {
             if target_exists "clean"; then
                 execute_target "clean"
             else
-                output_warning "No 'clean' target registered"
-                output_info "Plugins can register a 'clean' target"
+                output_warning "$(i18n_get "nothing_to_clean")"
+                output_info "$(i18n_get "plugin_targets")"
             fi
             build_cleanup
             ;;

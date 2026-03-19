@@ -66,12 +66,12 @@ plugin_load() {
     local path="${PLUGINS[$name]}"
     
     if [[ -z "$path" ]]; then
-        output_error "Plugin not found: $name"
+        output_error "$(i18n_get "plugin_not_found")"
         return 1
     fi
     
     if [[ ! -f "$path" ]]; then
-        output_error "Plugin file not found: $path"
+        output_error "$(i18n_get "plugin_file_not_found")"
         return 1
     fi
     
@@ -81,13 +81,13 @@ plugin_load() {
     PLUGIN_DEPENDENCIES=""
     
     if ! source "$path"; then
-        output_error "Failed to load plugin: $name"
+        output_error "$(i18n_get "failed_to_load_plugin")"
         return 1
     fi
     
     local plugin_name="${PLUGIN_NAME:-$name}"
     local plugin_version="${PLUGIN_VERSION:-1.0.0}"
-    local plugin_desc="${PLUGIN_DESCRIPTION:-No description}"
+    local plugin_desc="${PLUGIN_DESCRIPTION:-$(i18n_get "no_description")}"
     local plugin_deps="${PLUGIN_DEPENDENCIES:-}"
     
     PLUGIN_VERSIONS["$plugin_name"]="$plugin_version"
@@ -95,7 +95,7 @@ plugin_load() {
     PLUGIN_DEPENDENCIES["$plugin_name"]="$plugin_deps"
     PLUGIN_LOADED["$plugin_name"]="1"
     
-    output_debug "Loaded plugin: $plugin_name v$plugin_version"
+    output_debug "$(i18n_get "loaded_plugin")"
     
     return 0
 }
@@ -124,7 +124,7 @@ plugin_unload() {
     unset "PLUGIN_DESCRIPTIONS[$name]"
     unset "PLUGIN_DEPENDENCIES[$name]"
     
-    output_debug "Unloaded plugin: $name"
+    output_debug "$(i18n_get "plugin_unloaded"): $name"
 }
 
 plugin_reload() {
@@ -146,7 +146,7 @@ plugin_get_version() {
 
 plugin_get_description() {
     local name="$1"
-    echo "${PLUGIN_DESCRIPTIONS[$name]:-No description}"
+    echo "${PLUGIN_DESCRIPTIONS[$name]:-$(i18n_get "no_description")}"
 }
 
 plugin_get_dependencies() {
@@ -158,7 +158,7 @@ plugin_list() {
     local verbose="${1:-false}"
     
     if [[ "$verbose" == "true" ]]; then
-        output_header "Loaded Plugins" 50
+        output_header "$(i18n_get "plugins_section")" 50
         
         for name in "${!PLUGIN_LOADED[@]}"; do
             local version="${PLUGIN_VERSIONS[$name]}"
@@ -167,7 +167,7 @@ plugin_list() {
             
             output_key_value "$name" "v$version" 15
             output_bullet "$desc" 2
-            [[ -n "$deps" ]] && output_bullet "Dependencies: $deps" 2
+            [[ -n "$deps" ]] && output_bullet "$(i18n_get "dependencies"): $deps" 2
         done
     else
         for name in "${!PLUGIN_LOADED[@]}"; do
@@ -195,7 +195,7 @@ plugin_check_dependencies() {
     done
     
     if [[ ${#missing[@]} -gt 0 ]]; then
-        output_warning "Plugin '$name' has missing dependencies: ${missing[*]}"
+        output_warning "$(i18n_get "plugin_has_missing_dependencies")"
         return 1
     fi
     
@@ -221,7 +221,7 @@ plugin_install_dependencies() {
     done
     
     if [[ ${#to_install[@]} -gt 0 ]]; then
-        output_info "Installing dependencies for '$name': ${to_install[*]}"
+        output_info "$(i18n_get "installing_dependencies_for")"
         platform_install "${to_install[@]}"
     fi
 }
@@ -251,12 +251,12 @@ register_hook() {
             HOOKS_ON_CLEAN["$plugin_name"]="$hook_func"
             ;;
         *)
-            output_warning "Unknown hook type: $hook_type"
+            output_warning "$(i18n_get "unknown_hook_type")"
             return 1
             ;;
     esac
     
-    output_debug "Registered $hook_type hook for plugin: $plugin_name"
+    output_debug "$(i18n_get "registered_hook")"
     return 0
 }
 
@@ -271,9 +271,9 @@ run_hooks() {
         local hook_func="${hooks_ref[$plugin_name]}"
         
         if declare -f "$hook_func" &>/dev/null; then
-            output_debug "Running $hook_type hook: $hook_func"
+            output_debug "$(i18n_get "running_hook"): $hook_type"
             if ! $hook_func "${args[@]}"; then
-                output_warning "Hook $hook_func failed"
+                output_warning "$(i18n_get "hook_failed")"
             fi
         fi
     done
@@ -315,7 +315,7 @@ plugin_create() {
     local file="${output_dir}/${name}.sh"
     
     if [[ -f "$file" ]]; then
-        output_error "Plugin already exists: $file"
+        output_error "$(i18n_get "plugin_already_exists")"
         return 1
     fi
     
@@ -358,8 +358,8 @@ PLUGIN_TEMPLATE
 
     sed -i "s/__PLUGIN_NAME__/$name/g" "$file"
     
-    output_success "Created plugin: $file"
-    output_info "Edit the file to implement your build logic"
+    output_success "$(i18n_get "created_plugin")"
+    output_info "$(i18n_get "edit_file")"
 }
 
 plugin_validate() {
@@ -367,24 +367,24 @@ plugin_validate() {
     local path="${PLUGINS[$name]}"
     
     if [[ -z "$path" ]]; then
-        output_error "Plugin not found: $name"
+        output_error "$(i18n_get "plugin_not_found")"
         return 1
     fi
     
     local errors=0
     
     if ! grep -q "PLUGIN_NAME=" "$path" 2>/dev/null; then
-        output_warning "Plugin '$name' missing PLUGIN_NAME"
+        output_warning "$(i18n_get "plugin_missing_name")"
         ((errors++))
     fi
     
     if ! grep -q "register_target" "$path" 2>/dev/null; then
-        output_warning "Plugin '$name' has no registered targets"
+        output_warning "$(i18n_get "plugin_no_targets")"
         ((errors++))
     fi
     
     if [[ $errors -eq 0 ]]; then
-        output_success "Plugin '$name' is valid"
+        output_success "$(i18n_get "plugin_valid")"
         return 0
     else
         return 1
@@ -439,8 +439,8 @@ source_plugin() {
     fi
     
     if [[ -z "$plugin_file" ]]; then
-        output_error "Plugin not found: $plugin_name"
-        output_debug "Searched directories: ${search_dirs[*]}"
+        output_error "$(i18n_get "plugin_not_found")"
+        output_debug "$(i18n_get "searched_directories"): ${search_dirs[*]}"
         return 1
     fi
     
@@ -450,13 +450,13 @@ source_plugin() {
     PLUGIN_DEPENDENCIES=""
     
     if ! source "$plugin_file"; then
-        output_error "Failed to load plugin: $plugin_name"
+        output_error "$(i18n_get "failed_to_load_plugin")"
         return 1
     fi
     
     local plugin_name_final="${PLUGIN_NAME:-$plugin_name}"
     local plugin_version="${PLUGIN_VERSION:-1.0.0}"
-    local plugin_desc="${PLUGIN_DESCRIPTION:-No description}"
+    local plugin_desc="${PLUGIN_DESCRIPTION:-$(i18n_get "no_description")}"
     local plugin_deps="${PLUGIN_DEPENDENCIES:-}"
     
     PLUGIN_VERSIONS["$plugin_name_final"]="$plugin_version"
@@ -466,7 +466,7 @@ source_plugin() {
     PLUGINS["$plugin_name_final"]="$plugin_file"
     PLUGIN_PATHS["$plugin_name_final"]="$plugin_file"
     
-    output_debug "Loaded plugin: $plugin_name_final v$plugin_version from $plugin_file"
+    output_debug "$(i18n_get "loaded_plugin") from $plugin_file"
     
     return 0
 }

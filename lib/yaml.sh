@@ -5,8 +5,8 @@ _BUILD_YAML_LOADED=1
 
 yaml_check_yq() {
     if ! command_exists yq; then
-        output_error "yq is required for YAML config support"
-        output_info "Install with: build install yq"
+        output_error "$(i18n_get "yaml_required")"
+        output_info "$(i18n_get "install_yq")"
         return 1
     fi
     return 0
@@ -179,13 +179,6 @@ yaml_load_config() {
         source_plugin "$plugin"
     done
     
-    JAR_OUTPUT=$(yaml_read_str "$file" "java.jar_output" "")
-    MAIN_CLASS=$(yaml_read_str "$file" "java.main_class" "")
-    JAVA_SOURCE=$(yaml_read_str "$file" "java.source" "")
-    JAVA_TARGET=$(yaml_read_str "$file" "java.target" "")
-    JAVA_OPTS=$(yaml_read_str "$file" "java.opts" "")
-    JAVA_RUN_OPTS=$(yaml_read_str "$file" "java.run_opts" "")
-    
     local target_scripts
     target_scripts=$(yaml_read_keys "$file" "targets")
     
@@ -204,13 +197,13 @@ yaml_load_config() {
             fi
             
             if [[ -f "$full_path" ]]; then
-                register_target "$target_name" "Custom target: $target_name" "custom_target_$target_name"
+                register_target "$target_name" "$(i18n_get "custom_target"): $target_name" "custom_target_$target_name"
                 
                 eval "custom_target_${target_name}() {
                     source '${full_path}'
                 }"
             else
-                output_warning "Target script not found: $full_path"
+                output_warning "$(i18n_get "target_script_not_found")"
             fi
         fi
     done <<< "$target_scripts"

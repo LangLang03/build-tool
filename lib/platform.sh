@@ -329,10 +329,10 @@ command_exists() {
 
 require_command() {
     local cmd="$1"
-    local message="${2:-Command '$cmd' is required but not found}"
+    local message="${2:-$(i18n_get "command_required")}"
     
     if ! command_exists "$cmd"; then
-        echo "Error: $message" >&2
+        echo "$(i18n_get "error"): $message" >&2
         return 1
     fi
     return 0
@@ -348,7 +348,7 @@ require_commands() {
     done
     
     if [[ ${#failed[@]} -gt 0 ]]; then
-        echo "Error: Required commands not found: ${failed[*]}" >&2
+        echo "$(i18n_get "error"): $(i18n_get "required_command_not_found")" >&2
         return 1
     fi
     return 0
@@ -358,12 +358,12 @@ platform_install() {
     local packages=("$@")
     
     if [[ ${#packages[@]} -eq 0 ]]; then
-        echo "Error: No packages specified" >&2
+        echo "$(i18n_get "error"): $(i18n_get "no_packages_specified")" >&2
         return 1
     fi
     
     if [[ -z "$PLATFORM_PACKAGE_MANAGER" ]]; then
-        echo "Error: No package manager detected" >&2
+        echo "$(i18n_get "error"): $(i18n_get "no_package_manager_detected")" >&2
         return 1
     fi
     
@@ -371,7 +371,7 @@ platform_install() {
     local install_cmd="${PACKAGE_MANAGERS[$pm]}"
     
     if [[ -z "$install_cmd" ]]; then
-        echo "Error: Unknown package manager: $pm" >&2
+        echo "$(i18n_get "error"): $(i18n_get "unknown_package_manager"): $pm" >&2
         return 1
     fi
     
@@ -391,16 +391,16 @@ platform_install() {
         full_cmd="$install_cmd ${packages[*]}"
     fi
     
-    echo "Installing packages: ${packages[*]}"
-    echo "Using package manager: $pm"
-    echo "Command: $full_cmd"
+    echo "$(i18n_get "installing_packages")"
+    echo "$(i18n_get "using_package_manager")"
+    echo "$(i18n_get "command")"
     
     eval "$full_cmd"
 }
 
 platform_update() {
     if [[ -z "$PLATFORM_PACKAGE_MANAGER" ]]; then
-        echo "Error: No package manager detected" >&2
+        echo "$(i18n_get "error"): $(i18n_get "no_package_manager_detected")" >&2
         return 1
     fi
     
@@ -408,7 +408,7 @@ platform_update() {
     local update_cmd="${PACKAGE_UPDATE_COMMANDS[$pm]}"
     
     if [[ -z "$update_cmd" ]]; then
-        echo "Error: Update command not available for $pm" >&2
+        echo "$(i18n_get "error"): $(i18n_get "update_command_not_available")" >&2
         return 1
     fi
     
@@ -428,7 +428,7 @@ platform_update() {
         full_cmd="$update_cmd"
     fi
     
-    echo "Updating package lists..."
+    echo "$(i18n_get "updating_package_lists")"
     eval "$full_cmd"
 }
 
@@ -436,12 +436,12 @@ platform_search() {
     local query="$1"
     
     if [[ -z "$query" ]]; then
-        echo "Error: No search query specified" >&2
+        echo "$(i18n_get "error"): $(i18n_get "no_search_query")" >&2
         return 1
     fi
     
     if [[ -z "$PLATFORM_PACKAGE_MANAGER" ]]; then
-        echo "Error: No package manager detected" >&2
+        echo "$(i18n_get "error"): $(i18n_get "no_package_manager_detected")" >&2
         return 1
     fi
     
@@ -449,7 +449,7 @@ platform_search() {
     local search_cmd="${PACKAGE_SEARCH_COMMANDS[$pm]}"
     
     if [[ -z "$search_cmd" ]]; then
-        echo "Error: Search command not available for $pm" >&2
+        echo "$(i18n_get "error"): $(i18n_get "search_command_not_available")" >&2
         return 1
     fi
     
@@ -460,12 +460,12 @@ platform_remove() {
     local packages=("$@")
     
     if [[ ${#packages[@]} -eq 0 ]]; then
-        echo "Error: No packages specified" >&2
+        echo "$(i18n_get "error"): $(i18n_get "no_packages_specified")" >&2
         return 1
     fi
     
     if [[ -z "$PLATFORM_PACKAGE_MANAGER" ]]; then
-        echo "Error: No package manager detected" >&2
+        echo "$(i18n_get "error"): $(i18n_get "no_package_manager_detected")" >&2
         return 1
     fi
     
@@ -473,7 +473,7 @@ platform_remove() {
     local remove_cmd="${PACKAGE_REMOVE_COMMANDS[$pm]}"
     
     if [[ -z "$remove_cmd" ]]; then
-        echo "Error: Remove command not available for $pm" >&2
+        echo "$(i18n_get "error"): $(i18n_get "remove_command_not_available")" >&2
         return 1
     fi
     
@@ -493,22 +493,22 @@ platform_remove() {
         full_cmd="$remove_cmd ${packages[*]}"
     fi
     
-    echo "Removing packages: ${packages[*]}"
+    echo "$(i18n_get "removing_packages")"
     eval "$full_cmd"
 }
 
 platform_get_info() {
-    echo "Platform Information:"
-    echo "  OS:              $PLATFORM_OS"
-    echo "  Distribution:    $PLATFORM_DISTRO"
-    echo "  Family:          $PLATFORM_DISTRO_FAMILY"
-    echo "  Architecture:    $PLATFORM_ARCH"
-    echo "  Package Manager: ${PLATFORM_PACKAGE_MANAGER:-none}"
-    echo "  Has Sudo:        $PLATFORM_HAS_SUDO"
-    echo "  Is Root:         $PLATFORM_IS_ROOT"
-    echo "  Is WSL:          $PLATFORM_IS_WSL"
-    echo "  Is Git Bash:     $PLATFORM_IS_GIT_BASH"
-    echo "  Is Cygwin:       $PLATFORM_IS_CYGWIN"
+    echo "$(i18n_get "platform_info")"
+    echo "  $(i18n_get "os"):              $PLATFORM_OS"
+    echo "  $(i18n_get "distribution"):    $PLATFORM_DISTRO"
+    echo "  $(i18n_get "family"):          $PLATFORM_DISTRO_FAMILY"
+    echo "  $(i18n_get "architecture"):    $PLATFORM_ARCH"
+    echo "  $(i18n_get "package_manager"): ${PLATFORM_PACKAGE_MANAGER:-none}"
+    echo "  $(i18n_get "has_sudo"):        $PLATFORM_HAS_SUDO"
+    echo "  $(i18n_get "is_root"):         $PLATFORM_IS_ROOT"
+    echo "  $(i18n_get "is_wsl"):          $PLATFORM_IS_WSL"
+    echo "  $(i18n_get "is_git_bash"):     $PLATFORM_IS_GIT_BASH"
+    echo "  $(i18n_get "is_cygwin"):       $PLATFORM_IS_CYGWIN"
 }
 
 platform_is_linux() {
@@ -557,7 +557,7 @@ platform_run_sudo() {
     elif [[ "$PLATFORM_HAS_SUDO" == "true" ]]; then
         sudo "$@"
     else
-        echo "Error: Cannot run command with elevated privileges" >&2
+        echo "$(i18n_get "error"): $(i18n_get "cannot_run_elevated")" >&2
         return 1
     fi
 }

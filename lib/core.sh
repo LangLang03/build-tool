@@ -53,14 +53,14 @@ build_cleanup() {
 
 build_interrupt() {
     BUILD_INTERRUPTED=true
-    output_error "Build interrupted by user"
+    output_error "$(i18n_get "build_interrupted")"
     build_cleanup
     exit 130
 }
 
 register_target() {
     local name="$1"
-    local desc="${2:-No description}"
+    local desc="${2:-$(i18n_get "no_description")}"
     local func="${3:-${name}_build}"
     local plugin="${4:-core}"
     
@@ -106,15 +106,15 @@ list_targets() {
     local verbose="${1:-false}"
     
     if [[ "$verbose" == "true" ]]; then
-        output_header "Available Build Targets" 50
+        output_header "$(i18n_get "available_targets")" 50
         for name in "${!BUILD_TARGETS[@]}"; do
             local desc="${BUILD_TARGET_DESC[$name]}"
             local deps="${BUILD_TARGET_DEPS[$name]}"
             local plugin="${BUILD_TARGET_PLUGIN[$name]}"
             
             output_key_value "$name" "$desc" 15
-            [[ -n "$deps" ]] && output_bullet "Dependencies: ${deps}" 2
-            output_bullet "Plugin: $plugin" 2
+            [[ -n "$deps" ]] && output_bullet "$(i18n_get "dependencies"): ${deps}" 2
+            output_bullet "$(i18n_get "plugin"): $plugin" 2
         done
     else
         for name in "${!BUILD_TARGETS[@]}"; do
@@ -132,7 +132,7 @@ resolve_deps() {
     visiting_value=$(eval echo "\${${visiting_var}[$target]:-}")
     
     if [[ -n "$visiting_value" ]]; then
-        output_error "Circular dependency detected: $target"
+        output_error "$(i18n_get "circular_dependency")"
         return 1
     fi
     
@@ -152,7 +152,7 @@ resolve_deps() {
             dep=$(echo "$dep" | xargs)
             if [[ -n "$dep" ]]; then
                 if ! target_exists "$dep"; then
-                    output_error "Unknown dependency: $dep (required by $target)"
+                    output_error "$(i18n_get "unknown_dependency")"
                     return 1
                 fi
                 if ! resolve_deps "$dep" "$resolved_var" "$visiting_var"; then
@@ -215,7 +215,7 @@ execute_target() {
     local target="$1"
     
     if ! target_exists "$target"; then
-        output_error "Unknown target: $target"
+        output_error "$(i18n_get "unknown_target"): $target"
         return 1
     fi
     
@@ -227,11 +227,11 @@ execute_target() {
     local func="${BUILD_TARGET_FUNC[$target]}"
     
     if [[ -z "$func" ]] || ! declare -f "$func" &>/dev/null; then
-        output_error "Target '$target' has no implementation"
+        output_error "$(i18n_get "target_no_implementation")"
         return 1
     fi
     
-    output_section "Building target: $target"
+    output_section "$(i18n_get "building_target"): $target"
     
     local start_time
     start_time=$(date +%s)
@@ -241,7 +241,7 @@ execute_target() {
         end_time=$(date +%s)
         local duration=$((end_time - start_time))
         
-        output_success "Target '$target' completed in $(format_duration $duration)"
+        output_success "$(i18n_get "target_completed")"
         ((BUILD_SUCCESS_COUNT++))
         BUILD_EXECUTED_TARGETS+=("$target")
         return 0
@@ -250,7 +250,7 @@ execute_target() {
         end_time=$(date +%s)
         local duration=$((end_time - start_time))
         
-        output_error "Target '$target' failed after $(format_duration $duration)"
+        output_error "$(i18n_get "target_failed")"
         ((BUILD_FAIL_COUNT++))
         return 1
     fi
@@ -260,7 +260,7 @@ execute_target_with_deps() {
     local target="$1"
     
     if ! target_exists "$target"; then
-        output_error "Unknown target: $target"
+        output_error "$(i18n_get "unknown_target"): $target"
         return 1
     fi
     
@@ -303,7 +303,7 @@ step_start() {
     STEP_INFO["name"]="$name"
     STEP_INFO["start_time"]=$STEP_START_TIME
     
-    output_debug "Starting step: $name"
+    output_debug "$(i18n_get "starting_step"): $name"
 }
 
 step_end() {
@@ -316,9 +316,9 @@ step_end() {
     local duration=$((end_time - start_time))
     
     if [[ "$success" == "true" ]]; then
-        output_debug "Step '$name' completed in $(format_duration $duration)"
+        output_debug "$(i18n_get "step_completed"): $name ($(format_duration $duration))"
     else
-        output_debug "Step '$name' failed after $(format_duration $duration)"
+        output_debug "$(i18n_get "step_failed"): $name ($(format_duration $duration))"
     fi
     
     CURRENT_STEP=""
@@ -327,20 +327,20 @@ step_end() {
 
 step_skip() {
     local name="$1"
-    local reason="${2:-No reason provided}"
+    local reason="${2:-$(i18n_get "no_reason")}"
     
-    output_debug "Skipping step '$name': $reason"
+    output_debug "$(i18n_get "skipping_step")"
     ((BUILD_SKIP_COUNT++))
 }
 
 compile_file() {
     local src="$1"
     local dest="$2"
-    local action="${3:-Compiling}"
+    local action="${3:-$(i18n_get "compiling")}"
     
     if [[ ! -f "$src" ]]; then
         output_file_status "$src" "$dest" "error"
-        output_error "Source file not found: $src"
+        output_error "$(i18n_get "source_file_not_found")"
         return 1
     fi
     
@@ -437,7 +437,7 @@ build_summary() {
     BUILD_END_TIME=$(date +%s)
     local duration=$((BUILD_END_TIME - BUILD_START_TIME))
     
-    output_summary "Build Summary" \
+    output_summary "$(i18n_get "build_summary")" \
         "$BUILD_SUCCESS_COUNT" \
         "$BUILD_FAIL_COUNT" \
         "$BUILD_SKIP_COUNT" \
@@ -455,18 +455,18 @@ clean_target() {
     local target="$1"
     local dirs="${2:-build}"
     
-    output_section "Cleaning target: $target"
+    output_section "$(i18n_get "cleaning_target")"
     
     IFS=',' read -ra dir_array <<< "$dirs"
     for dir in "${dir_array[@]}"; do
         dir=$(echo "$dir" | xargs)
         if [[ -d "$dir" ]]; then
-            output_info "Removing $dir"
+            output_info "$(i18n_get "removing_dir")"
             rm -rf "$dir"
         fi
     done
     
-    output_success "Clean completed"
+    output_success "$(i18n_get "clean_completed")"
 }
 
 check_dependencies() {
@@ -479,8 +479,8 @@ check_dependencies() {
     done
     
     if [[ ${#missing[@]} -gt 0 ]]; then
-        output_error "Missing dependencies: ${missing[*]}"
-        output_info "Install with: build install ${missing[*]}"
+        output_error "$(i18n_get "missing_dependencies")"
+        output_info "$(i18n_get "install_dependencies")"
         return 1
     fi
     
@@ -497,7 +497,7 @@ ensure_dependencies() {
     done
     
     if [[ ${#to_install[@]} -gt 0 ]]; then
-        output_info "Installing dependencies: ${to_install[*]}"
+        output_info "$(i18n_get "installing_dependencies")"
         platform_install "${to_install[@]}"
     fi
 }
@@ -510,7 +510,7 @@ run_hook() {
     local hook_func="${hook_name}_hook"
     
     if declare -f "$hook_func" &>/dev/null; then
-        output_debug "Running hook: $hook_name"
+        output_debug "$(i18n_get "running_hook")"
         $hook_func "${args[@]}"
         return $?
     fi
