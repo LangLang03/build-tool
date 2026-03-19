@@ -151,10 +151,10 @@ $(i18n_get "plugins")
 }
 
 show_version() {
-    echo "$(i18n_get "version_info")"
-    echo "$(i18n_get "platform")"
-    echo "$(i18n_get "architecture")"
-    echo "$(i18n_get "package_manager")"
+    echo "$BUILD_TOOL_NAME v$BUILD_TOOL_VERSION"
+    echo "$(i18n_get "platform"): $PLATFORM_OS ($PLATFORM_DISTRO)"
+    echo "$(i18n_get "architecture"): $PLATFORM_ARCH"
+    echo "$(i18n_get "package_manager"): ${PLATFORM_PACKAGE_MANAGER:-none}"
 }
 
 show_config() {
@@ -202,7 +202,7 @@ check_environment() {
     
     output_section "$(i18n_get "package_manager_section")"
     if [[ -n "$PLATFORM_PACKAGE_MANAGER" ]]; then
-        output_success "$(i18n_get "package_manager_found")"
+        output_success "$(i18n_get "package_manager_found"): $PLATFORM_PACKAGE_MANAGER"
     else
         output_warning "$(i18n_get "no_package_manager")"
         ((issues++))
@@ -213,17 +213,29 @@ check_environment() {
     local tool
     for tool in "${required_tools[@]}"; do
         if command_exists "$tool"; then
-            output_success "$(i18n_get "tool_available")"
+            output_success "$tool $(i18n_get "tool_available")"
         else
-            output_error "$(i18n_get "tool_missing")"
+            output_error "$tool $(i18n_get "tool_missing")"
             ((issues++))
         fi
     done
     
+    output_section "$(i18n_get "optional_tools")"
+    if command_exists yq; then
+        output_success "yq $(i18n_get "tool_available") ($(i18n_get "recommended"))"
+    else
+        output_warning "yq $(i18n_get "tool_missing") ($(i18n_get "recommended") for YAML config)"
+        if confirm_action "$(i18n_get "yq_install_prompt")"; then
+            platform_install_yq
+        else
+            output_info "$(i18n_get "yq_install_skipped")"
+        fi
+    fi
+    
     output_section "$(i18n_get "plugins_section")"
     local plugin_count=${#PLUGIN_LOADED[@]}
     if [[ $plugin_count -gt 0 ]]; then
-        output_success "$(i18n_get "plugins_found")"
+        output_success "$(i18n_get "plugins_found"): $plugin_count $(i18n_get "plugin_count")"
         for name in "${!PLUGIN_LOADED[@]}"; do
             output_bullet "$name"
         done
@@ -236,7 +248,7 @@ check_environment() {
         output_success "$(i18n_get "all_checks_passed")"
         return 0
     else
-        output_error "$(i18n_get "issues_found")"
+        output_error "$issues $(i18n_get "issues_found")"
         return 1
     fi
 }
@@ -284,6 +296,30 @@ handle_plugin_command() {
                 done
             else
                 plugin_install_dependencies "$1"
+            fi
+            ;;
+        packages|pkgs)
+            if [[ -z "${1:-}" ]]; then
+                for name in "${!PLUGIN_LOADED[@]}"; do
+                    local pkgs="${PLUGIN_PACKAGES[$name]}"
+                    if [[ -n "$pkgs" ]]; then
+                        output_info "$name: $pkgs"
+                    fi
+                done
+            else
+                local pkgs="${PLUGIN_PACKAGES[$1]}"
+                if [[ -n "$pkgs" ]]; then
+                    output_info "$1: $pkgs"
+                else
+                    output_info "$(i18n_get "no_packages_to_install")"
+                fi
+            fi
+            ;;
+        install-pkgs|install-packages)
+            if [[ -z "${1:-}" ]]; then
+                plugin_install_all_packages
+            else
+                plugin_install_packages "$1"
             fi
             ;;
         *)

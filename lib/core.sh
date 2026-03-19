@@ -227,7 +227,7 @@ execute_target() {
     local func="${BUILD_TARGET_FUNC[$target]}"
     
     if [[ -z "$func" ]] || ! declare -f "$func" &>/dev/null; then
-        output_error "$(i18n_get "target_no_implementation")"
+        output_error "$(i18n_get "target_no_implementation"): $target"
         return 1
     fi
     
@@ -241,7 +241,7 @@ execute_target() {
         end_time=$(date +%s)
         local duration=$((end_time - start_time))
         
-        output_success "$(i18n_get "target_completed")"
+        output_success "$(i18n_get "target_completed"): $target"
         ((BUILD_SUCCESS_COUNT++))
         BUILD_EXECUTED_TARGETS+=("$target")
         return 0
@@ -250,7 +250,7 @@ execute_target() {
         end_time=$(date +%s)
         local duration=$((end_time - start_time))
         
-        output_error "$(i18n_get "target_failed")"
+        output_error "$(i18n_get "target_failed"): $target"
         ((BUILD_FAIL_COUNT++))
         return 1
     fi

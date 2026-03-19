@@ -10,6 +10,7 @@ declare -gA PLUGIN_DESCRIPTIONS=()
 declare -gA PLUGIN_DEPENDENCIES=()
 declare -gA PLUGIN_LOADED=()
 declare -gA PLUGIN_PATHS_BY_NAME=()
+declare -gA PLUGIN_PACKAGES=()
 
 declare -ga PLUGIN_DIRS=()
 declare -g PLUGIN_EXTENSIONS=(".sh" ".plugin.sh" ".bash")
@@ -66,12 +67,12 @@ plugin_load() {
     local path="${PLUGINS[$name]}"
     
     if [[ -z "$path" ]]; then
-        output_error "$(i18n_get "plugin_not_found")"
+        output_error "$(i18n_get "plugin_not_found"): $name"
         return 1
     fi
     
     if [[ ! -f "$path" ]]; then
-        output_error "$(i18n_get "plugin_file_not_found")"
+        output_error "$(i18n_get "plugin_file_not_found"): $path"
         return 1
     fi
     
@@ -79,9 +80,10 @@ plugin_load() {
     PLUGIN_VERSION=""
     PLUGIN_DESCRIPTION=""
     PLUGIN_DEPENDENCIES=""
+    PLUGIN_PACKAGES_STR=""
     
     if ! source "$path"; then
-        output_error "$(i18n_get "failed_to_load_plugin")"
+        output_error "$(i18n_get "failed_to_load_plugin"): $name"
         return 1
     fi
     
@@ -89,13 +91,15 @@ plugin_load() {
     local plugin_version="${PLUGIN_VERSION:-1.0.0}"
     local plugin_desc="${PLUGIN_DESCRIPTION:-$(i18n_get "no_description")}"
     local plugin_deps="${PLUGIN_DEPENDENCIES:-}"
+    local plugin_pkgs="${PLUGIN_PACKAGES_STR:-}"
     
     PLUGIN_VERSIONS["$plugin_name"]="$plugin_version"
     PLUGIN_DESCRIPTIONS["$plugin_name"]="$plugin_desc"
     PLUGIN_DEPENDENCIES["$plugin_name"]="$plugin_deps"
+    PLUGIN_PACKAGES["$plugin_name"]="$plugin_pkgs"
     PLUGIN_LOADED["$plugin_name"]="1"
     
-    output_debug "$(i18n_get "loaded_plugin")"
+    output_debug "$(i18n_get "loaded_plugin"): $plugin_name v$plugin_version"
     
     return 0
 }
@@ -154,6 +158,17 @@ plugin_get_dependencies() {
     echo "${PLUGIN_DEPENDENCIES[$name]:-}"
 }
 
+plugin_get_packages() {
+    local name="$1"
+    echo "${PLUGIN_PACKAGES[$name]:-}"
+}
+
+plugin_has_packages() {
+    local name="$1"
+    local pkgs="${PLUGIN_PACKAGES[$name]:-}"
+    [[ -n "$pkgs" ]]
+}
+
 plugin_list() {
     local verbose="${1:-false}"
     
@@ -164,10 +179,12 @@ plugin_list() {
             local version="${PLUGIN_VERSIONS[$name]}"
             local desc="${PLUGIN_DESCRIPTIONS[$name]}"
             local deps="${PLUGIN_DEPENDENCIES[$name]}"
+            local pkgs="${PLUGIN_PACKAGES[$name]}"
             
             output_key_value "$name" "v$version" 15
             output_bullet "$desc" 2
             [[ -n "$deps" ]] && output_bullet "$(i18n_get "dependencies"): $deps" 2
+            [[ -n "$pkgs" ]] && output_bullet "$(i18n_get "plugin_packages"): $pkgs" 2
         done
     else
         for name in "${!PLUGIN_LOADED[@]}"; do
@@ -195,7 +212,7 @@ plugin_check_dependencies() {
     done
     
     if [[ ${#missing[@]} -gt 0 ]]; then
-        output_warning "$(i18n_get "plugin_has_missing_dependencies")"
+        output_warning "$(i18n_get "plugin_has_missing_dependencies"): $name - ${missing[*]}"
         return 1
     fi
     
@@ -221,9 +238,71 @@ plugin_install_dependencies() {
     done
     
     if [[ ${#to_install[@]} -gt 0 ]]; then
-        output_info "$(i18n_get "installing_dependencies_for")"
-        platform_install "${to_install[@]}"
+        output_info "$(i18n_get "installing_dependencies_for"): $name - ${to_install[*]}"
+        platform_install_with_confirm "${to_install[@]}"
     fi
+}
+
+plugin_install_packages() {
+    local name="$1"
+    local pkgs="${PLUGIN_PACKAGES[$name]}"
+    
+    if [[ -z "$pkgs" ]]; then
+        return 0
+    fi
+    
+    local -a to_install=()
+    IFS=',' read -ra pkg_array <<< "$pkgs"
+    
+    for pkg in "${pkg_array[@]}"; do
+        pkg=$(echo "$pkg" | xargs)
+        if [[ -n "$pkg" ]]; then
+            to_install+=("$pkg")
+        fi
+    done
+    
+    if [[ ${#to_install[@]} -eq 0 ]]; then
+        return 0
+    fi
+    
+    output_section "$(i18n_get "plugin_packages")"
+    local prompt
+    printf -v prompt "$(i18n_get "plugin_packages_prompt")" "$name" "${to_install[*]}"
+    
+    if ! confirm_action "$prompt"; then
+        output_info "$(i18n_get "package_install_skipped")"
+        return 0
+    fi
+    
+    output_info "$(i18n_get "installing_plugin_packages"): $name"
+    
+    local success=0
+    local failed=0
+    
+    for pkg in "${to_install[@]}"; do
+        if platform_install_with_confirm "$pkg"; then
+            ((success++))
+        else
+            ((failed++))
+        fi
+    done
+    
+    if [[ $failed -gt 0 ]]; then
+        output_warning "$failed $(i18n_get "issues_found")"
+        return 1
+    fi
+    
+    return 0
+}
+
+plugin_install_all_packages() {
+    local interactive="${1:-true}"
+    
+    for name in "${!PLUGIN_LOADED[@]}"; do
+        if plugin_has_packages "$name"; then
+            plugin_install_packages "$name"
+        fi
+    done
 }
 
 register_hook() {
@@ -251,12 +330,12 @@ register_hook() {
             HOOKS_ON_CLEAN["$plugin_name"]="$hook_func"
             ;;
         *)
-            output_warning "$(i18n_get "unknown_hook_type")"
+            output_warning "$(i18n_get "unknown_hook_type"): $hook_type"
             return 1
             ;;
     esac
     
-    output_debug "$(i18n_get "registered_hook")"
+    output_debug "$(i18n_get "registered_hook"): $plugin_name ($hook_type)"
     return 0
 }
 
@@ -328,6 +407,7 @@ PLUGIN_NAME="__PLUGIN_NAME__"
 PLUGIN_VERSION="1.0.0"
 PLUGIN_DESCRIPTION="Plugin description"
 PLUGIN_DEPENDENCIES=""
+PLUGIN_PACKAGES_STR=""
 
 register_target "build" "Build the project" "__PLUGIN_NAME___build"
 register_target "clean" "Clean build artifacts" "__PLUGIN_NAME___clean"
@@ -448,6 +528,7 @@ source_plugin() {
     PLUGIN_VERSION=""
     PLUGIN_DESCRIPTION=""
     PLUGIN_DEPENDENCIES=""
+    PLUGIN_PACKAGES_STR=""
     
     if ! source "$plugin_file"; then
         output_error "$(i18n_get "failed_to_load_plugin")"
@@ -458,10 +539,12 @@ source_plugin() {
     local plugin_version="${PLUGIN_VERSION:-1.0.0}"
     local plugin_desc="${PLUGIN_DESCRIPTION:-$(i18n_get "no_description")}"
     local plugin_deps="${PLUGIN_DEPENDENCIES:-}"
+    local plugin_pkgs="${PLUGIN_PACKAGES_STR:-}"
     
     PLUGIN_VERSIONS["$plugin_name_final"]="$plugin_version"
     PLUGIN_DESCRIPTIONS["$plugin_name_final"]="$plugin_desc"
     PLUGIN_DEPENDENCIES["$plugin_name_final"]="$plugin_deps"
+    PLUGIN_PACKAGES["$plugin_name_final"]="$plugin_pkgs"
     PLUGIN_LOADED["$plugin_name_final"]="1"
     PLUGINS["$plugin_name_final"]="$plugin_file"
     PLUGIN_PATHS["$plugin_name_final"]="$plugin_file"

@@ -4,6 +4,7 @@ PLUGIN_NAME="java"
 PLUGIN_VERSION="1.0.0"
 PLUGIN_DESCRIPTION="Java compilation plugin"
 PLUGIN_DEPENDENCIES="javac jar"
+PLUGIN_PACKAGES_STR="openjdk-11-jdk,openjdk-17-jdk"
 
 declare -g JAR_OUTPUT="${JAR_OUTPUT:-}"
 declare -g MAIN_CLASS="${MAIN_CLASS:-}"

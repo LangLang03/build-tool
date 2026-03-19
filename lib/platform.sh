@@ -391,9 +391,9 @@ platform_install() {
         full_cmd="$install_cmd ${packages[*]}"
     fi
     
-    echo "$(i18n_get "installing_packages")"
-    echo "$(i18n_get "using_package_manager")"
-    echo "$(i18n_get "command")"
+    echo "$(i18n_get "installing_packages"): ${packages[*]}"
+    echo "$(i18n_get "using_package_manager"): $pm"
+    echo "$(i18n_get "command"): $full_cmd"
     
     eval "$full_cmd"
 }
@@ -408,7 +408,7 @@ platform_update() {
     local update_cmd="${PACKAGE_UPDATE_COMMANDS[$pm]}"
     
     if [[ -z "$update_cmd" ]]; then
-        echo "$(i18n_get "error"): $(i18n_get "update_command_not_available")" >&2
+        echo "$(i18n_get "error"): $(i18n_get "update_command_not_available"): $pm" >&2
         return 1
     fi
     
@@ -449,7 +449,7 @@ platform_search() {
     local search_cmd="${PACKAGE_SEARCH_COMMANDS[$pm]}"
     
     if [[ -z "$search_cmd" ]]; then
-        echo "$(i18n_get "error"): $(i18n_get "search_command_not_available")" >&2
+        echo "$(i18n_get "error"): $(i18n_get "search_command_not_available"): $pm" >&2
         return 1
     fi
     
@@ -473,7 +473,7 @@ platform_remove() {
     local remove_cmd="${PACKAGE_REMOVE_COMMANDS[$pm]}"
     
     if [[ -z "$remove_cmd" ]]; then
-        echo "$(i18n_get "error"): $(i18n_get "remove_command_not_available")" >&2
+        echo "$(i18n_get "error"): $(i18n_get "remove_command_not_available"): $pm" >&2
         return 1
     fi
     
@@ -493,7 +493,7 @@ platform_remove() {
         full_cmd="$remove_cmd ${packages[*]}"
     fi
     
-    echo "$(i18n_get "removing_packages")"
+    echo "$(i18n_get "removing_packages"): ${packages[*]}"
     eval "$full_cmd"
 }
 
@@ -626,6 +626,83 @@ platform_get_cache_dir() {
     else
         echo "${XDG_CACHE_HOME:-${HOME}/.cache}"
     fi
+}
+
+confirm_action() {
+    local prompt="${1:-$(i18n_get "confirm_install")}"
+    local default="${2:-n}"
+    
+    local response
+    read -r -p "$prompt [y/N]: " response
+    response="${response:-$default}"
+    
+    case "${response,,}" in
+        y|yes|是)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+platform_install_with_confirm() {
+    local packages=("$@")
+    
+    if [[ ${#packages[@]} -eq 0 ]]; then
+        echo "$(i18n_get "error"): $(i18n_get "no_packages_specified")" >&2
+        return 1
+    fi
+    
+    if [[ -z "$PLATFORM_PACKAGE_MANAGER" ]]; then
+        echo "$(i18n_get "error"): $(i18n_get "no_package_manager_detected")" >&2
+        return 1
+    fi
+    
+    local prompt
+    printf -v prompt "$(i18n_get "confirm_install_package")" "${packages[*]}"
+    
+    if ! confirm_action "$prompt"; then
+        output_info "$(i18n_get "package_install_skipped")"
+        return 0
+    fi
+    
+    output_info "$(printf "$(i18n_get "installing_package")" "${packages[*]}")"
+    
+    if platform_install "${packages[@]}"; then
+        output_success "$(printf "$(i18n_get "package_install_success")" "${packages[*]}")"
+        return 0
+    else
+        output_error "$(printf "$(i18n_get "package_install_failed")" "${packages[*]}")"
+        return 1
+    fi
+}
+
+platform_install_yq() {
+    if command_exists yq; then
+        output_success "$(i18n_get "yq_available")"
+        return 0
+    fi
+    
+    output_warning "$(i18n_get "yq_not_found_check")"
+    output_info "$(i18n_get "yq_required_for")"
+    
+    if ! confirm_action "$(i18n_get "yq_install_prompt")"; then
+        output_info "$(i18n_get "yq_install_skipped")"
+        return 1
+    fi
+    
+    output_info "$(i18n_get "yq_installing")"
+    
+    if platform_install "yq"; then
+        if command_exists yq; then
+            output_success "$(i18n_get "yq_install_success")"
+            return 0
+        fi
+    fi
+    
+    output_error "$(i18n_get "yq_install_failed")"
+    return 1
 }
 
 platform_detect

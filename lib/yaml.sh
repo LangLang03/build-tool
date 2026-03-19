@@ -203,7 +203,7 @@ yaml_load_config() {
                     source '${full_path}'
                 }"
             else
-                output_warning "$(i18n_get "target_script_not_found")"
+                output_warning "$(i18n_get "target_script_not_found"): $full_path"
             fi
         fi
     done <<< "$target_scripts"
