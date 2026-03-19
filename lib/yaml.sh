@@ -186,7 +186,10 @@ yaml_load_config() {
         [[ -z "$target_name" ]] && continue
         
         local script_path
-        script_path=$(yaml_read_str "$file" "targets.$target_name")
+        local deps_str
+        
+        script_path=$(yaml_read_str "$file" "targets.$target_name.script")
+        deps_str=$(yaml_read_str "$file" "targets.$target_name.deps")
         
         if [[ -n "$script_path" ]]; then
             local full_path
@@ -205,6 +208,13 @@ yaml_load_config() {
             else
                 output_warning "$(i18n_get "target_script_not_found"): $full_path"
             fi
+        fi
+        
+        if [[ -n "$deps_str" ]]; then
+            local -a deps_array=()
+            IFS=',' read -ra deps_array <<< "$deps_str"
+            
+            register_target_deps "$target_name" "${deps_array[@]}"
         fi
     done <<< "$target_scripts"
     
