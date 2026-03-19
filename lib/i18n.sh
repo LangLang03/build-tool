@@ -411,6 +411,7 @@ _i18n_init_strings() {
         ["optional_tools"]="可选工具"
         ["recommended"]="推荐"
     )
+}
 
 i18n_set_lang() {
     local lang="$1"

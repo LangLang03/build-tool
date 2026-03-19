@@ -186,10 +186,10 @@ yaml_load_config() {
         [[ -z "$target_name" ]] && continue
         
         local script_path
-        local deps_str
+        local -a deps_array=()
         
         script_path=$(yaml_read_str "$file" "targets.$target_name.script")
-        deps_str=$(yaml_read_str "$file" "targets.$target_name.deps")
+        yaml_read_array "$file" "targets.$target_name.deps" deps_array
         
         if [[ -n "$script_path" ]]; then
             local full_path
@@ -210,10 +210,7 @@ yaml_load_config() {
             fi
         fi
         
-        if [[ -n "$deps_str" ]]; then
-            local -a deps_array=()
-            IFS=',' read -ra deps_array <<< "$deps_str"
-            
+        if [[ ${#deps_array[@]} -gt 0 ]]; then
             register_target_deps "$target_name" "${deps_array[@]}"
         fi
     done <<< "$target_scripts"
