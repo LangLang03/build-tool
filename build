@@ -1,0 +1,497 @@
+#!/usr/bin/env bash
+
+set -o pipefail
+
+BUILD_TOOL_VERSION="1.0.0"
+BUILD_TOOL_NAME="build-tool"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="${SCRIPT_DIR}/lib"
+
+source "${LIB_DIR}/utils.sh"
+source "${LIB_DIR}/output.sh"
+source "${LIB_DIR}/log.sh"
+source "${LIB_DIR}/platform.sh"
+source "${LIB_DIR}/config.sh"
+source "${LIB_DIR}/core.sh"
+source "${LIB_DIR}/plugin.sh"
+source "${LIB_DIR}/cache.sh"
+source "${LIB_DIR}/i18n.sh"
+source "${LIB_DIR}/yaml.sh"
+
+find_project_config() {
+    local current_dir="${1:-$(pwd)}"
+    
+    if [[ -f "$current_dir/build.yaml" ]]; then
+        echo "$current_dir/build.yaml"
+        return 0
+    fi
+    
+    if [[ -f "$current_dir/build.yml" ]]; then
+        echo "$current_dir/build.yml"
+        return 0
+    fi
+    
+    if [[ -f "$current_dir/build.sh" ]]; then
+        echo "$current_dir/build.sh"
+        return 0
+    fi
+    
+    return 1
+}
+
+load_project_config() {
+    local config_file="${1:-}"
+    
+    if [[ -z "$config_file" ]]; then
+        config_file=$(find_project_config)
+    fi
+    
+    if [[ -n "$config_file" ]] && [[ -f "$config_file" ]]; then
+        PROJECT_CONFIG_FILE="$config_file"
+        PROJECT_DIR=$(dirname "$config_file")
+        
+        cd "$PROJECT_DIR"
+        
+        output_debug "Loading project config: $config_file"
+        
+        local ext="${config_file##*.}"
+        
+        case "$ext" in
+            yaml|yml)
+                if yaml_check_yq; then
+                    yaml_load_config "$config_file"
+                else
+                    output_warning "yq not found, skipping YAML config"
+                    return 1
+                fi
+                ;;
+            sh)
+                source "$config_file"
+                ;;
+            *)
+                output_warning "Unknown config format: $ext"
+                return 1
+                ;;
+        esac
+        
+        if [[ -z "$PROJECT_NAME" ]]; then
+            PROJECT_NAME=$(basename "$PROJECT_DIR")
+        fi
+        
+        if [[ -z "$PROJECT_VERSION" ]]; then
+            PROJECT_VERSION="1.0.0"
+        fi
+        
+        config_set "PROJECT_NAME" "$PROJECT_NAME"
+        config_set "PROJECT_VERSION" "$PROJECT_VERSION"
+        
+        if [[ -n "$SOURCE_DIR" ]]; then
+            config_set "SOURCE_DIR" "$SOURCE_DIR"
+        fi
+        
+        if [[ -n "$BUILD_DIR" ]]; then
+            config_set "BUILD_DIR" "$BUILD_DIR"
+        fi
+        
+        output_debug "Project: $PROJECT_NAME v$PROJECT_VERSION"
+        return 0
+    fi
+    
+    return 1
+}
+
+show_help() {
+    local help_text
+    help_text="$(i18n_get "build_help")
+
+$(i18n_get "usage")
+    build [OPTIONS] <COMMAND> [ARGS...]
+
+$(i18n_get "command")
+    $(i18n_get "target")
+    $(i18n_get "list")
+    $(i18n_get "clean")
+    $(i18n_get "install")
+    $(i18n_get "update")
+    $(i18n_get "search")
+    $(i18n_get "check")
+    $(i18n_get "config")
+    $(i18n_get "plugin")
+    $(i18n_get "cache")
+    $(i18n_get "help")
+    $(i18n_get "version")
+
+$(i18n_get "options")
+    $(i18n_get "verbose")
+    $(i18n_get "quiet")
+    $(i18n_get "no_color")
+    $(i18n_get "no_unicode")
+    $(i18n_get "config_file")
+    $(i18n_get "jobs")
+    $(i18n_get "no_cache")
+    $(i18n_get "log_file")
+
+$(i18n_get "examples")
+    $(i18n_get "example_build")
+    $(i18n_get "example_clean")
+    $(i18n_get "example_install")
+    $(i18n_get "example_list")
+    $(i18n_get "example_verbose")
+
+$(i18n_get "plugins")
+    $(i18n_get "plugin_desc")
+    $(i18n_get "plugin_place")
+    $(i18n_get "plugin_targets")
+
+    $(i18n_get "plugin_create")
+        $(i18n_get "plugin_create_example")
+"
+    echo "$help_text"
+}
+
+show_version() {
+    echo "$(i18n_get "version_info")"
+    echo "$(i18n_get "platform")"
+    echo "$(i18n_get "architecture")"
+    echo "$(i18n_get "package_manager")"
+}
+
+show_config() {
+    output_header "$(i18n_get "config_header")" 50
+    
+    if [[ -n "$PROJECT_CONFIG_FILE" ]]; then
+        output_section "Project"
+        output_key_value "Config File" "$PROJECT_CONFIG_FILE" 15
+        output_key_value "Project Name" "$PROJECT_NAME" 15
+        output_key_value "Project Version" "$PROJECT_VERSION" 15
+        output_key_value "Project Dir" "$PROJECT_DIR" 15
+    fi
+    
+    output_section "$(i18n_get "platform_section")"
+    output_key_value "OS" "$PLATFORM_OS" 15
+    output_key_value "$(i18n_get "distribution")" "$PLATFORM_DISTRO" 15
+    output_key_value "$(i18n_get "architecture")" "$PLATFORM_ARCH" 15
+    output_key_value "$(i18n_get "package_manager")" "${PLATFORM_PACKAGE_MANAGER:-none}" 15
+    
+    output_section "$(i18n_get "build_settings")"
+    output_key_value "$(i18n_get "verbose")" "$(config_get VERBOSE)" 15
+    output_key_value "$(i18n_get "quiet")" "$(config_get QUIET)" 15
+    output_key_value "$(i18n_get "no_color")" "$(config_get COLOR)" 15
+    output_key_value "$(i18n_get "jobs")" "$(config_get PARALLEL)" 15
+    output_key_value "Jobs" "$(config_get JOBS)" 15
+    output_key_value "$(i18n_get "no_cache")" "$(config_get INCREMENTAL)" 15
+    
+    output_section "$(i18n_get "directories")"
+    output_key_value "$(i18n_get "build_dir")" "$(config_get BUILD_DIR)" 15
+    output_key_value "$(i18n_get "source_dir")" "$(config_get SOURCE_DIR)" 15
+    output_key_value "$(i18n_get "cache_dir")" "$CACHE_DIR" 15
+}
+
+check_environment() {
+    output_header "$(i18n_get "environment_check")" 50
+    
+    local issues=0
+    
+    output_section "$(i18n_get "system")"
+    output_key_value "OS" "$PLATFORM_OS" 15
+    output_key_value "$(i18n_get "distribution")" "$PLATFORM_DISTRO" 15
+    output_key_value "$(i18n_get "architecture")" "$PLATFORM_ARCH" 15
+    output_key_value "$(i18n_get "root")" "$PLATFORM_IS_ROOT" 15
+    output_key_value "$(i18n_get "sudo")" "$PLATFORM_HAS_SUDO" 15
+    
+    output_section "$(i18n_get "package_manager_section")"
+    if [[ -n "$PLATFORM_PACKAGE_MANAGER" ]]; then
+        output_success "$(i18n_get "package_manager_found")"
+    else
+        output_warning "$(i18n_get "no_package_manager")"
+        ((issues++))
+    fi
+    
+    output_section "$(i18n_get "required_tools")"
+    local required_tools=("bash" "cat" "mkdir" "rm" "cp" "mv")
+    for tool in "${required_tools[@]}"; do
+        if command_exists "$tool"; then
+            output_success "$(i18n_get "tool_available")"
+        else
+            output_error "$(i18n_get "tool_missing")"
+            ((issues++))
+        fi
+    done
+    
+    output_section "$(i18n_get "plugins_section")"
+    local plugin_count=${#PLUGIN_LOADED[@]}
+    if [[ $plugin_count -gt 0 ]]; then
+        output_success "$(i18n_get "plugins_found")"
+        for name in "${!PLUGIN_LOADED[@]}"; do
+            output_bullet "$name"
+        done
+    else
+        output_warning "$(i18n_get "no_plugins")"
+    fi
+    
+    output_section "$(i18n_get "summary")"
+    if [[ $issues -eq 0 ]]; then
+        output_success "$(i18n_get "all_checks_passed")"
+        return 0
+    else
+        output_error "$(i18n_get "issues_found")"
+        return 1
+    fi
+}
+
+handle_plugin_command() {
+    local subcommand="${1:-list}"
+    shift 2>/dev/null || true
+    
+    case "$subcommand" in
+        list|ls)
+            plugin_list "true"
+            ;;
+        create|new)
+            if [[ -z "${1:-}" ]]; then
+                output_error "Plugin name required"
+                return 1
+            fi
+            plugin_create "$1" "${2:-plugins}"
+            ;;
+        validate|check)
+            if [[ -z "${1:-}" ]]; then
+                for name in "${!PLUGIN_LOADED[@]}"; do
+                    plugin_validate "$name"
+                done
+            else
+                plugin_validate "$1"
+            fi
+            ;;
+        deps|dependencies)
+            if [[ -z "${1:-}" ]]; then
+                for name in "${!PLUGIN_LOADED[@]}"; do
+                    local deps="${PLUGIN_DEPENDENCIES[$name]}"
+                    if [[ -n "$deps" ]]; then
+                        output_info "$name: $deps"
+                    fi
+                done
+            else
+                plugin_check_dependencies "$1"
+            fi
+            ;;
+        install-deps)
+            if [[ -z "${1:-}" ]]; then
+                for name in "${!PLUGIN_LOADED[@]}"; do
+                    plugin_install_dependencies "$name"
+                done
+            else
+                plugin_install_dependencies "$1"
+            fi
+            ;;
+        *)
+            output_error "Unknown plugin command: $subcommand"
+            echo "Available: list, create, validate, deps, install-deps"
+            return 1
+            ;;
+    esac
+}
+
+handle_cache_command() {
+    local subcommand="${1:-stats}"
+    shift 2>/dev/null || true
+    
+    case "$subcommand" in
+        stats|status)
+            cache_get_stats
+            ;;
+        clear|clean)
+            output_info "Clearing cache..."
+            cache_clear
+            output_success "Cache cleared"
+            ;;
+        enable)
+            cache_enable
+            output_success "Cache enabled"
+            ;;
+        disable)
+            cache_disable
+            output_success "Cache disabled"
+            ;;
+        cleanup)
+            output_info "Cleaning expired and oversized cache entries..."
+            cache_cleanup
+            output_success "Cache cleanup completed"
+            ;;
+        *)
+            output_error "Unknown cache command: $subcommand"
+            echo "Available: stats, clear, enable, disable, cleanup"
+            return 1
+            ;;
+    esac
+}
+
+parse_options() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help|help)
+                show_help
+                exit 0
+                ;;
+            -V|--version|version)
+                show_version
+                exit 0
+                ;;
+            -v|--verbose)
+                config_set "VERBOSE" "true"
+                output_set_verbose
+                log_set_level "debug"
+                shift
+                ;;
+            -q|--quiet)
+                config_set "QUIET" "true"
+                output_set_quiet
+                log_set_level "none"
+                shift
+                ;;
+            --no-color)
+                config_set "COLOR" "false"
+                output_set_color false
+                shift
+                ;;
+            --no-unicode)
+                config_set "UNICODE" "false"
+                output_set_unicode false
+                shift
+                ;;
+            -c|--config)
+                PROJECT_CONFIG_FILE="$2"
+                shift 2
+                ;;
+            --jobs|-j)
+                config_set "JOBS" "$2"
+                PARALLEL_JOBS="$2"
+                shift 2
+                ;;
+            --no-cache)
+                config_set "INCREMENTAL" "false"
+                cache_disable
+                shift
+                ;;
+            --log-file)
+                log_set_file "$2"
+                shift 2
+                ;;
+            --)
+                shift
+                break
+                ;;
+            -*)
+                output_error "Unknown option: $1"
+                echo "Use 'build help' for usage information"
+                exit 1
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+    
+    REMAINING_ARGS=("$@")
+}
+
+main() {
+    parse_options "$@"
+    set -- "${REMAINING_ARGS[@]}"
+    
+    i18n_init
+    
+    config_init
+    
+    cache_init
+    
+    plugin_init
+    
+    load_project_config "$PROJECT_CONFIG_FILE"
+    
+    plugin_discover
+    plugin_load_all
+    
+    local command="${1:-help}"
+    shift 2>/dev/null || true
+    
+    case "$command" in
+        list|targets)
+            list_targets "true"
+            ;;
+        clean)
+            build_init
+            run_clean_hooks
+            if target_exists "clean"; then
+                execute_target "clean"
+            else
+                output_warning "No 'clean' target registered"
+                output_info "Plugins can register a 'clean' target"
+            fi
+            build_cleanup
+            ;;
+        install)
+            if [[ $# -eq 0 ]]; then
+                output_error "$(i18n_get "no_packages_specified")"
+                echo "Usage: build install <packages...>"
+                exit 1
+            fi
+            platform_install "$@"
+            ;;
+        update)
+            platform_update
+            ;;
+        search)
+            if [[ -z "${1:-}" ]]; then
+                output_error "$(i18n_get "no_search_query")"
+                echo "Usage: build search <query>"
+                exit 1
+            fi
+            platform_search "$1"
+            ;;
+        check)
+            check_environment
+            ;;
+        config)
+            show_config
+            ;;
+        plugin)
+            handle_plugin_command "$@"
+            ;;
+        cache)
+            handle_cache_command "$@"
+            ;;
+        help|--help|-h)
+            show_help
+            ;;
+        version|--version|-V)
+            show_version
+            ;;
+        *)
+            if target_exists "$command"; then
+                build_init
+                run_pre_build_hooks "$command"
+                
+                if execute_target_with_deps "$command"; then
+                    run_post_build_hooks "$command"
+                    build_finalize
+                else
+                    run_error_hooks "$command"
+                    build_cleanup
+                    exit 1
+                fi
+            else
+                output_error "$(i18n_get "unknown_command")"
+                echo ""
+                echo "$(i18n_get "available_targets")"
+                list_targets "false"
+                echo ""
+                echo "$(i18n_get "use_help")"
+                exit 1
+            fi
+            ;;
+    esac
+}
+
+main "$@"

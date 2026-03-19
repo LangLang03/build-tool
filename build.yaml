@@ -1,0 +1,30 @@
+project:
+  name: hello-world
+  version: 1.0.0
+  description: A sample Java project
+
+directories:
+  source: src
+  build: output
+  resources: resources
+
+plugins:
+  - java
+
+java:
+  jar_output: hello-${project.version}.jar
+  main_class: Main
+  source: 17
+  target: 17
+  opts: -Xlint:all
+  run_opts: -Xmx256m
+
+targets:
+  build: scripts/build.sh
+  test: scripts/test.sh
+  release: scripts/release.sh
+  dev: scripts/dev.sh
+
+hooks:
+  pre_build: scripts/hooks/pre_build.sh
+  post_build: scripts/hooks/post_build.sh
