@@ -21,6 +21,14 @@ declare -ga ANDROID_EXCLUDED_DEPS=(
     "com.android.tools.build:manifest-merger"
 )
 
+declare -ga ANDROID_EXCLUDED_SUFFIXES=(
+    "-lint"
+    "-lint-checks"
+    "-truth"
+    "-test"
+    "-testing"
+)
+
 android_deps_init() {
     ANDROID_DEPS_DIR="${ANDROID_BUILD_DIR}/dependencies"
     ANDROID_DEPS_CACHE_DIR="${CACHE_DIR}/android/dependencies"
@@ -35,7 +43,24 @@ android_maven_parse_coord() {
     
     IFS=':' read -r group artifact version <<< "$coord"
     
+    version=$(android_maven_normalize_version "$version")
+    
     echo "${group}|${artifact}|${version}"
+}
+
+android_maven_normalize_version() {
+    local version="$1"
+    
+    version="${version#\[\]}"
+    version="${version//\[}"
+    version="${version//\]}"
+    
+    if [[ "$version" == *","* ]]; then
+        version="${version##*,}"
+        version="${version%%,*}"
+    fi
+    
+    echo "$version"
 }
 
 android_maven_to_path() {
@@ -197,6 +222,12 @@ android_is_dep_excluded() {
         fi
     done
     
+    for suffix in "${ANDROID_EXCLUDED_SUFFIXES[@]}"; do
+        if [[ "$artifact" == *"$suffix" ]]; then
+            return 0
+        fi
+    done
+    
     return 1
 }
 
@@ -229,6 +260,8 @@ android_download_dependency() {
     
     output_info "$(android_i18n_get "downloading"): $coord"
     
+    local -a failed_repos=()
+    
     for repo in "${ANDROID_REPOSITORIES[@]}"; do
         local url="${repo}/${dep_path}.${type}"
         
@@ -242,9 +275,39 @@ android_download_dependency() {
             fi
             rm -f "$cache_file"
         fi
+        failed_repos+=("$repo")
     done
     
-    output_error "$(android_i18n_get "download_failed"): $coord"
+    return 1
+}
+
+android_download_dependency_with_fallback() {
+    local coord="$1"
+    
+    local cache_file_aar="${ANDROID_DEPS_CACHE_DIR}/$(android_maven_to_path "$coord").aar"
+    local cache_file_jar="${ANDROID_DEPS_CACHE_DIR}/$(android_maven_to_path "$coord").jar"
+    
+    if [[ -f "$cache_file_aar" ]]; then
+        output_debug "$(android_i18n_printf "cache_hit_coord" "$coord")"
+        ANDROID_DEP_PATHS["$coord"]="$cache_file_aar"
+        return 0
+    fi
+    
+    if [[ -f "$cache_file_jar" ]]; then
+        output_debug "$(android_i18n_printf "cache_hit_coord" "$coord")"
+        ANDROID_DEP_PATHS["$coord"]="$cache_file_jar"
+        return 0
+    fi
+    
+    if android_download_dependency "$coord" "aar"; then
+        return 0
+    fi
+    
+    if android_download_dependency "$coord" "jar"; then
+        return 0
+    fi
+    
+    output_error "$(android_i18n_get "download_failed_all_sources"): $coord"
     return 1
 }
 
@@ -388,11 +451,13 @@ android_resolve_dependency() {
     android_download_pom "$coord" 2>/dev/null || true
     pom_file="${ANDROID_DEP_POMS[$coord]:-}"
     
-    if android_download_dependency "$coord" "aar" 2>/dev/null; then
-        android_process_aar "$coord"
-        downloaded=true
-    elif android_download_dependency "$coord" "jar" 2>/dev/null; then
-        android_process_jar "$coord"
+    if android_download_dependency_with_fallback "$coord"; then
+        local dep_file="${ANDROID_DEP_PATHS[$coord]}"
+        if [[ "$dep_file" == *.aar ]]; then
+            android_process_aar "$coord"
+        else
+            android_process_jar "$coord"
+        fi
         downloaded=true
     fi
     

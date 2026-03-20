@@ -90,6 +90,9 @@ android_config_load() {
         ANDROID_REPOSITORIES=(
             "https://maven.aliyun.com/repository/google"
             "https://maven.aliyun.com/repository/public"
+            "https://dl.google.com/dl/android/maven2"
+            "https://repo1.maven.org/maven2"
+            "https://maven.google.com"
         )
     fi
     
