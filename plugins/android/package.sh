@@ -24,6 +24,20 @@ android_package_init() {
 android_package_apk() {
     output_section "$(android_i18n_get "packaging")"
     
+    if ! command_exists zip; then
+        output_error "zip command not found"
+        if confirm_action "Install zip package?"; then
+            if platform_install zip; then
+                output_success "zip installed successfully"
+            else
+                output_error "Failed to install zip"
+                return 1
+            fi
+        else
+            return 1
+        fi
+    fi
+    
     android_package_init
     
     local resource_ap
@@ -80,11 +94,14 @@ android_package_apk() {
     
     rm -f "$ANDROID_UNSIGNED_APK"
     
+    local unsigned_apk_abs
+    unsigned_apk_abs=$(cd "$(dirname "$ANDROID_UNSIGNED_APK")" && pwd)/$(basename "$ANDROID_UNSIGNED_APK")
+    
     local current_dir
     current_dir=$(pwd)
     cd "$ANDROID_APK_TEMP_DIR"
     
-    if ! zip -q -r "$ANDROID_UNSIGNED_APK" .; then
+    if ! zip -q -r "$unsigned_apk_abs" .; then
         cd "$current_dir"
         output_error "$(android_i18n_get "package_failed")"
         return 1
