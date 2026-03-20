@@ -12,6 +12,7 @@ declare -g PLATFORM_HAS_SUDO=false
 declare -g PLATFORM_IS_WSL=false
 declare -g PLATFORM_IS_GIT_BASH=false
 declare -g PLATFORM_IS_CYGWIN=false
+declare -g PLATFORM_IS_TERMUX=false
 declare -g PLATFORM_IS_ROOT=false
 
 declare -gA PACKAGE_MANAGERS=(
@@ -257,8 +258,21 @@ _platform_detect_linux_distro() {
     PLATFORM_DISTRO="${distro}"
     PLATFORM_DISTRO_FAMILY="${family}"
     
-    _platform_detect_linux_pm
-    _platform_detect_wsl
+    _platform_detect_termux
+    if [[ "$PLATFORM_IS_TERMUX" != "true" ]]; then
+        _platform_detect_linux_pm
+        _platform_detect_wsl
+    fi
+}
+
+_platform_detect_termux() {
+    if [[ -d "/data/data/com.termux" ]] || [[ -n "${TERMUX_VERSION:-}" ]] || [[ -f "${PREFIX:-}/bin/pkg" ]]; then
+        PLATFORM_IS_TERMUX=true
+        PLATFORM_DISTRO="termux"
+        PLATFORM_PACKAGE_MANAGER="pkg"
+    else
+        PLATFORM_IS_TERMUX=false
+    fi
 }
 
 _platform_detect_linux_pm() {

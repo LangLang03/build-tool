@@ -64,7 +64,9 @@ android_dex_classes() {
     
     local -a inputs=()
     
-    inputs+=("$ANDROID_CLASSES_DIR")
+    while IFS= read -r -d '' class_file; do
+        inputs+=("$class_file")
+    done < <(find "$ANDROID_CLASSES_DIR" -name "*.class" -print0 2>/dev/null)
     
     local jar_files
     jar_files=$(android_get_jar_files)
@@ -74,6 +76,11 @@ android_dex_classes() {
             inputs+=("$jar")
         fi
     done
+    
+    if [[ ${#inputs[@]} -eq 0 ]]; then
+        output_warning "No class files found to convert to DEX"
+        return 0
+    fi
     
     output_debug "Running d8 with ${#inputs[@]} inputs"
     

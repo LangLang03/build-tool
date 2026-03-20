@@ -177,6 +177,12 @@ _android_init_i18n() {
         ["cleaning_deps_dir"]="Cleaning dependencies directory"
         ["skipping_kotlin"]="Kotlin compilation disabled"
         ["kotlin_files"]="Kotlin files"
+        
+        ["native_tool_not_found"]="Native tool not found: %s"
+        ["install_tool_prompt"]="Install %s?"
+        ["installing_tool"]="Installing: %s"
+        ["tool_install_success"]="Tool installed: %s"
+        ["tool_install_failed"]="Failed to install: %s"
     )
     
     ANDROID_I18N_ZH=(
@@ -348,6 +354,12 @@ _android_init_i18n() {
         ["cleaning_deps_dir"]="正在清理依赖目录"
         ["skipping_kotlin"]="Kotlin 编译已禁用"
         ["kotlin_files"]="Kotlin 文件"
+        
+        ["native_tool_not_found"]="未找到原生工具: %s"
+        ["install_tool_prompt"]="是否安装 %s？"
+        ["installing_tool"]="正在安装: %s"
+        ["tool_install_success"]="工具安装成功: %s"
+        ["tool_install_failed"]="工具安装失败: %s"
     )
     
     if [[ -n "${LANG:-}" ]]; then

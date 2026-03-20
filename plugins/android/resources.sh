@@ -19,26 +19,6 @@ android_resources_init() {
     ensure_dir "$ANDROID_GENERATED_R_DIR"
 }
 
-android_get_aapt2() {
-    local aapt2="${ANDROID_SDK_ROOT}/build-tools/${ANDROID_BUILD_TOOLS}/aapt2"
-    
-    if [[ -f "$aapt2" ]]; then
-        echo "$aapt2"
-        return 0
-    fi
-    
-    if [[ "$PLATFORM_OS" == "windows" ]]; then
-        aapt2="${aapt2}.exe"
-        if [[ -f "$aapt2" ]]; then
-            echo "$aapt2"
-            return 0
-        fi
-    fi
-    
-    output_error "aapt2 not found in build-tools/${ANDROID_BUILD_TOOLS}"
-    return 1
-}
-
 android_compile_single_resource() {
     local input_file="$1"
     local output_dir="$2"

@@ -148,6 +148,43 @@ android_get_tool() {
     local tool_name="$1"
     local version="${2:-$ANDROID_BUILD_TOOLS}"
     
+    local -a native_tools=("aapt" "aapt2" "zipalign")
+    
+    if [[ "$PLATFORM_IS_TERMUX" == "true" ]]; then
+        local found=false
+        for nt in "${native_tools[@]}"; do
+            if [[ "$tool_name" == "$nt" ]]; then
+                found=true
+                break
+            fi
+        done
+        
+        if [[ "$found" == "true" ]]; then
+            local termux_tool="${PREFIX:-/data/data/com.termux/files/usr}/bin/${tool_name}"
+            if [[ -f "$termux_tool" ]] && [[ -x "$termux_tool" ]]; then
+                echo "$termux_tool"
+                return 0
+            fi
+            if command -v "$tool_name" &>/dev/null; then
+                command -v "$tool_name"
+                return 0
+            fi
+            
+            output_error "$(android_i18n_printf "native_tool_not_found" "$tool_name")"
+            if confirm_action "$(android_i18n_printf "install_tool_prompt" "$tool_name")"; then
+                output_info "$(android_i18n_printf "installing_tool" "$tool_name")"
+                if platform_install "$tool_name"; then
+                    output_success "$(android_i18n_printf "tool_install_success" "$tool_name")"
+                    command -v "$tool_name"
+                    return 0
+                else
+                    output_error "$(android_i18n_printf "tool_install_failed" "$tool_name")"
+                fi
+            fi
+            return 1
+        fi
+    fi
+    
     local tool_path="${ANDROID_SDK_ROOT}/build-tools/${version}/${tool_name}"
     
     if [[ -f "$tool_path" ]]; then
@@ -168,16 +205,8 @@ android_get_aapt2() {
     android_get_tool "aapt2"
 }
 
-android_get_d8() {
-    android_get_tool "d8"
-}
-
 android_get_zipalign() {
     android_get_tool "zipalign"
-}
-
-android_get_apksigner() {
-    android_get_tool "apksigner"
 }
 
 android_get_android_jar() {
@@ -187,6 +216,20 @@ android_get_android_jar() {
     if [[ -f "$jar_path" ]]; then
         echo "$jar_path"
         return 0
+    fi
+    
+    if [[ "$PLATFORM_IS_TERMUX" == "true" ]]; then
+        local termux_jar="${PREFIX:-/data/data/com.termux/files/usr}/share/android/android-${version}.jar"
+        if [[ -f "$termux_jar" ]]; then
+            echo "$termux_jar"
+            return 0
+        fi
+        
+        termux_jar="${PREFIX:-/data/data/com.termux/files/usr}/lib/android-sdk/android-${version}.jar"
+        if [[ -f "$termux_jar" ]]; then
+            echo "$termux_jar"
+            return 0
+        fi
     fi
     
     return 1
@@ -351,10 +394,49 @@ android_install_all_required() {
     return 0
 }
 
-android_setup_sdk() {
-    local sdk_dir="${1:-${HOME}/Android/Sdk}"
+android_install_termux_tools() {
+    output_section "Installing Termux Android native tools"
     
+    local -a packages=("aapt" "aapt2")
+    local -a missing=()
+    
+    for pkg in "${packages[@]}"; do
+        if ! command -v "$pkg" &>/dev/null; then
+            missing+=("$pkg")
+        fi
+    done
+    
+    if [[ ${#missing[@]} -eq 0 ]]; then
+        output_success "All Termux Android native tools are installed"
+        return 0
+    fi
+    
+    if ! confirm_action "$(printf "Install missing tools: %s? (includes aapt, aapt2, zipalign)" "${missing[*]}")"; then
+        output_info "Installation skipped"
+        return 1
+    fi
+    
+    output_info "Installing: ${missing[*]} (includes aapt, aapt2, zipalign)"
+    
+    if ! platform_install "${missing[@]}"; then
+        output_error "Failed to install Termux Android tools"
+        return 1
+    fi
+    
+    output_success "Termux Android native tools installed"
+    return 0
+}
+
+android_setup_sdk() {
     output_section "$(android_i18n_get "setting_up_env")"
+    
+    if [[ "$PLATFORM_IS_TERMUX" == "true" ]]; then
+        if ! android_install_termux_tools; then
+            return 1
+        fi
+    fi
+    
+    local sdk_dir="${1:-${HOME}/Android/Sdk}"
     
     if [[ ! -d "$sdk_dir" ]]; then
         output_info "$(android_i18n_get "creating_sdk_dir")"

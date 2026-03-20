@@ -21,26 +21,6 @@ android_package_init() {
     ANDROID_FINAL_APK="${ANDROID_OUTPUT_DIR}/${app_name}-${build_type}.apk"
 }
 
-android_get_zipalign() {
-    local zipalign="${ANDROID_SDK_ROOT}/build-tools/${ANDROID_BUILD_TOOLS}/zipalign"
-    
-    if [[ -f "$zipalign" ]]; then
-        echo "$zipalign"
-        return 0
-    fi
-    
-    if [[ "$PLATFORM_OS" == "windows" ]]; then
-        zipalign="${zipalign}.exe"
-        if [[ -f "$zipalign" ]]; then
-            echo "$zipalign"
-            return 0
-        fi
-    fi
-    
-    output_error "zipalign not found in build-tools/${ANDROID_BUILD_TOOLS}"
-    return 1
-}
-
 android_package_apk() {
     output_section "$(android_i18n_get "packaging")"
     
@@ -104,7 +84,7 @@ android_package_apk() {
     current_dir=$(pwd)
     cd "$ANDROID_APK_TEMP_DIR"
     
-    if ! zip -q -r "$ANDROID_UNSIGNED_APK" . 2>/dev/null; then
+    if ! zip -q -r "$ANDROID_UNSIGNED_APK" .; then
         cd "$current_dir"
         output_error "$(android_i18n_get "package_failed")"
         return 1
@@ -132,7 +112,7 @@ android_zipalign_apk() {
     
     output_debug "Aligning APK..."
     
-    if "$zipalign" -f -v -p 4 "$input_apk" "$output_apk" >/dev/null 2>&1; then
+    if "$zipalign" -f -v -p 4 "$input_apk" "$output_apk"; then
         return 0
     else
         output_error "zipalign failed"
