@@ -447,6 +447,8 @@ main() {
     
     i18n_init
     
+    platform_detect
+    
     config_init
     
     cache_init
