@@ -25,12 +25,12 @@ android_package_apk() {
     output_section "$(android_i18n_get "packaging")"
     
     if ! command_exists zip; then
-        output_error "zip command not found"
-        if confirm_action "Install zip package?"; then
+        output_error "$(android_i18n_get "zip_not_found")"
+        if confirm_action "$(android_i18n_get "install_zip_prompt")"; then
             if platform_install zip; then
-                output_success "zip installed successfully"
+                output_success "$(android_i18n_get "zip_installed")"
             else
-                output_error "Failed to install zip"
+                output_error "$(android_i18n_get "zip_install_failed")"
                 return 1
             fi
         else
@@ -44,7 +44,7 @@ android_package_apk() {
     resource_ap=$(android_get_resource_ap)
     
     if [[ -z "$resource_ap" ]] || [[ ! -f "$resource_ap" ]]; then
-        output_error "Resources not compiled. Run android:resources first."
+        output_error "$(android_i18n_get "resources_not_compiled")"
         return 1
     fi
     
@@ -52,17 +52,17 @@ android_package_apk() {
     dex_count=$(android_count_dex_files)
     
     if [[ $dex_count -eq 0 ]]; then
-        output_error "No DEX files found. Run android:dex first."
+        output_error "$(android_i18n_get "no_dex_files")"
         return 1
     fi
     
     rm -rf "$ANDROID_APK_TEMP_DIR"
     ensure_dir "$ANDROID_APK_TEMP_DIR"
     
-    output_info "$(android_i18n_get "extracting") resources..."
+    output_info "$(android_i18n_get "extracting_resources")"
     
     if ! unzip -q -o "$resource_ap" -d "$ANDROID_APK_TEMP_DIR"; then
-        output_error "Failed to extract resources"
+        output_error "$(android_i18n_get "extract_resources_failed")"
         return 1
     fi
     
@@ -123,16 +123,16 @@ android_zipalign_apk() {
     zipalign=$(android_get_zipalign) || return 1
     
     if [[ ! -f "$input_apk" ]]; then
-        output_error "Input APK not found: $input_apk"
+        output_error "$(android_i18n_printf "input_apk_not_found" "$input_apk")"
         return 1
     fi
     
-    output_debug "Aligning APK..."
+    output_debug "$(android_i18n_get "aligning_apk")"
     
     if "$zipalign" -f -v -p 4 "$input_apk" "$output_apk"; then
         return 0
     else
-        output_error "zipalign failed"
+        output_error "$(android_i18n_get "zipalign_failed")"
         return 1
     fi
 }

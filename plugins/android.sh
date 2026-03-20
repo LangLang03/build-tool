@@ -395,14 +395,14 @@ android_install() {
     local apk_file="${ANDROID_FINAL_APK}"
     
     if [[ ! -f "$apk_file" ]]; then
-        output_error "APK not found. Run android:build first."
+        output_error "$(android_i18n_get "apk_not_found_build")"
         return 1
     fi
     
     local adb="${ANDROID_SDK_ROOT}/platform-tools/adb"
     
     if [[ ! -f "$adb" ]]; then
-        output_error "adb not found"
+        output_error "$(android_i18n_get "adb_not_found")"
         return 1
     fi
     
@@ -435,18 +435,18 @@ android_run() {
     local adb="${ANDROID_SDK_ROOT}/platform-tools/adb"
     
     if [[ ! -f "$adb" ]]; then
-        output_error "adb not found"
+        output_error "$(android_i18n_get "adb_not_found")"
         return 1
     fi
     
     local package="${ANDROID_APPLICATION_ID}"
     
     if [[ -z "$package" ]]; then
-        output_error "Application ID not configured"
+        output_error "$(android_i18n_get "app_id_not_configured")"
         return 1
     fi
     
-    output_info "Starting: $package"
+    output_info "$(android_i18n_printf "starting_package" "$package")"
     
     "$adb" shell am start -n "${package}/.MainActivity" 2>&1
 }
@@ -454,30 +454,30 @@ android_run() {
 android_info() {
     android_config_init
     
-    output_header "Android Project Information" 50
+    output_header "$(android_i18n_get "android_project_info")" 50
     
-    output_section "Project"
-    output_key_value "Application ID" "${ANDROID_APPLICATION_ID:-not set}" 20
-    output_key_value "Version Name" "${ANDROID_VERSION_NAME:-not set}" 20
-    output_key_value "Version Code" "${ANDROID_VERSION_CODE:-not set}" 20
+    output_section "$(android_i18n_get "project_section")"
+    output_key_value "Application ID" "${ANDROID_APPLICATION_ID:-$(android_i18n_get "not_set")}" 20
+    output_key_value "Version Name" "${ANDROID_VERSION_NAME:-$(android_i18n_get "not_set")}" 20
+    output_key_value "Version Code" "${ANDROID_VERSION_CODE:-$(android_i18n_get "not_set")}" 20
     
-    output_section "SDK"
-    output_key_value "Compile SDK" "${ANDROID_COMPILE_SDK:-not set}" 20
-    output_key_value "Build Tools" "${ANDROID_BUILD_TOOLS:-not set}" 20
-    output_key_value "Min SDK" "${ANDROID_MIN_SDK:-not set}" 20
-    output_key_value "Target SDK" "${ANDROID_TARGET_SDK:-not set}" 20
+    output_section "$(android_i18n_get "sdk_section")"
+    output_key_value "Compile SDK" "${ANDROID_COMPILE_SDK:-$(android_i18n_get "not_set")}" 20
+    output_key_value "Build Tools" "${ANDROID_BUILD_TOOLS:-$(android_i18n_get "not_set")}" 20
+    output_key_value "Min SDK" "${ANDROID_MIN_SDK:-$(android_i18n_get "not_set")}" 20
+    output_key_value "Target SDK" "${ANDROID_TARGET_SDK:-$(android_i18n_get "not_set")}" 20
     
-    output_section "Build"
+    output_section "$(android_i18n_get "build_section")"
     output_key_value "Build Type" "${ANDROID_BUILD_TYPE:-debug}" 20
     output_key_value "Minify" "${ANDROID_MINIFY:-false}" 20
     
-    output_section "Directories"
+    output_section "$(android_i18n_get "directories_section")"
     output_key_value "Project" "$ANDROID_PROJECT_DIR" 20
     output_key_value "Source" "$ANDROID_SOURCE_DIR" 20
     output_key_value "Build" "$ANDROID_BUILD_DIR" 20
     
     if [[ ${#ANDROID_DEPS_IMPLEMENTATION[@]} -gt 0 ]]; then
-        output_section "Dependencies"
+        output_section "$(android_i18n_get "dependencies_section")"
         for dep in "${ANDROID_DEPS_IMPLEMENTATION[@]}"; do
             output_bullet "$dep"
         done

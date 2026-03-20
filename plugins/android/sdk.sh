@@ -395,7 +395,7 @@ android_install_all_required() {
 }
 
 android_install_termux_tools() {
-    output_section "Installing Termux Android native tools"
+    output_section "$(android_i18n_get "installing_termux_tools")"
     
     local -a packages=("aapt" "aapt2")
     local -a missing=()
@@ -407,23 +407,23 @@ android_install_termux_tools() {
     done
     
     if [[ ${#missing[@]} -eq 0 ]]; then
-        output_success "All Termux Android native tools are installed"
+        output_success "$(android_i18n_get "all_termux_tools_installed")"
         return 0
     fi
     
-    if ! confirm_action "$(printf "Install missing tools: %s? (includes aapt, aapt2, zipalign)" "${missing[*]}")"; then
-        output_info "Installation skipped"
+    if ! confirm_action "$(android_i18n_printf "install_missing_tools_prompt" "${missing[*]}")"; then
+        output_info "$(android_i18n_get "installation_skipped")"
         return 1
     fi
     
-    output_info "Installing: ${missing[*]} (includes aapt, aapt2, zipalign)"
+    output_info "$(android_i18n_printf "installing_tools" "${missing[*]}")"
     
     if ! platform_install "${missing[@]}"; then
-        output_error "Failed to install Termux Android tools"
+        output_error "$(android_i18n_get "termux_tools_install_failed")"
         return 1
     fi
     
-    output_success "Termux Android native tools installed"
+    output_success "$(android_i18n_get "termux_tools_installed")"
     return 0
 }
 
@@ -474,7 +474,7 @@ android_setup_env_vars() {
     esac
     
     if grep -q "ANDROID_HOME" "$rc_file" 2>/dev/null; then
-        output_debug "Environment variables already configured in $rc_file"
+        output_debug "$(android_i18n_printf "env_already_configured" "$rc_file")"
         return 0
     fi
     
@@ -493,8 +493,8 @@ android_setup_env_vars() {
 }
 
 android_get_sdk_info() {
-    echo "Android SDK Information"
-    echo "  SDK Root:     ${ANDROID_SDK_ROOT:-not set}"
+    echo "$(android_i18n_get "android_sdk_info")"
+    echo "  SDK Root:     ${ANDROID_SDK_ROOT:-$(android_i18n_get "not_set")}"
     echo "  Compile SDK:  ${ANDROID_COMPILE_SDK}"
     echo "  Build Tools:  ${ANDROID_BUILD_TOOLS}"
     echo "  Min SDK:      ${ANDROID_MIN_SDK}"

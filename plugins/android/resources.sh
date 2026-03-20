@@ -7,16 +7,65 @@ declare -g ANDROID_RES_DIR=""
 declare -g ANDROID_COMPILED_RES_DIR=""
 declare -g ANDROID_LINKED_RES_DIR=""
 declare -g ANDROID_GENERATED_R_DIR=""
+declare -g ANDROID_PROCESSED_MANIFEST=""
 
 android_resources_init() {
     ANDROID_RES_DIR="${ANDROID_SOURCE_DIR}/res"
     ANDROID_COMPILED_RES_DIR="${ANDROID_BUILD_DIR}/compiled_res"
     ANDROID_LINKED_RES_DIR="${ANDROID_BUILD_DIR}/linked"
     ANDROID_GENERATED_R_DIR="${ANDROID_BUILD_DIR}/generated/r"
+    ANDROID_PROCESSED_MANIFEST="${ANDROID_BUILD_DIR}/processed/AndroidManifest.xml"
     
     ensure_dir "$ANDROID_COMPILED_RES_DIR"
     ensure_dir "$ANDROID_LINKED_RES_DIR"
     ensure_dir "$ANDROID_GENERATED_R_DIR"
+    ensure_dir "$(dirname "$ANDROID_PROCESSED_MANIFEST")"
+}
+
+android_process_manifest() {
+    output_section "$(android_i18n_get "processing_manifest")"
+    
+    android_resources_init
+    
+    local manifest="${ANDROID_MANIFEST}"
+    
+    if [[ ! -f "$manifest" ]]; then
+        output_error "$(android_i18n_printf "manifest_not_found_path" "$manifest")"
+        return 1
+    fi
+    
+    cp "$manifest" "$ANDROID_PROCESSED_MANIFEST"
+    
+    local has_uses_sdk
+    has_uses_sdk=$(grep -c "<uses-sdk" "$ANDROID_PROCESSED_MANIFEST" 2>/dev/null || echo "0")
+    
+    if [[ "$has_uses_sdk" -eq 0 ]]; then
+        local uses_sdk_tag="    <uses-sdk android:minSdkVersion=\"${ANDROID_MIN_SDK}\" android:targetSdkVersion=\"${ANDROID_TARGET_SDK}\" />"
+        
+        local temp_file="${ANDROID_PROCESSED_MANIFEST}.tmp"
+        
+        if grep -q "</application>" "$ANDROID_PROCESSED_MANIFEST"; then
+            sed "s|</application>|${uses_sdk_tag}\n    </application>|" "$ANDROID_PROCESSED_MANIFEST" > "$temp_file"
+            mv "$temp_file" "$ANDROID_PROCESSED_MANIFEST"
+        else
+            sed "s|</manifest>|${uses_sdk_tag}\n</manifest>|" "$ANDROID_PROCESSED_MANIFEST" > "$temp_file"
+            mv "$temp_file" "$ANDROID_PROCESSED_MANIFEST"
+        fi
+        
+        output_debug "$(android_i18n_printf "added_uses_sdk" "${ANDROID_MIN_SDK}" "${ANDROID_TARGET_SDK}")"
+    else
+        if command_exists xmlstarlet; then
+            xmlstarlet ed -L \
+                -u "//uses-sdk/@android:minSdkVersion" -v "${ANDROID_MIN_SDK}" \
+                -u "//uses-sdk/@android:targetSdkVersion" -v "${ANDROID_TARGET_SDK}" \
+                "$ANDROID_PROCESSED_MANIFEST" 2>/dev/null || true
+        fi
+        
+        output_debug "$(android_i18n_get "updated_uses_sdk")"
+    fi
+    
+    output_success "$(android_i18n_get "manifest_processed")"
+    return 0
 }
 
 android_compile_single_resource() {
@@ -33,7 +82,7 @@ android_compile_single_resource() {
     local output_file="${output_dir}/${dir_name}_${file_name//\//_}.flat"
     
     if ! "$aapt2" compile -o "$output_dir" "$input_file" 2>&1; then
-        output_error "Failed to compile: $input_file"
+        output_error "$(android_i18n_printf "failed_compile_resource" "$input_file")"
         return 1
     fi
     
@@ -43,10 +92,12 @@ android_compile_single_resource() {
 android_compile_resources() {
     output_section "$(android_i18n_get "resources_compiling")"
     
-    android_resources_init
+    if [[ ! -d "$ANDROID_RES_DIR" ]]; then
+        android_resources_init
+    fi
     
     if [[ ! -d "$ANDROID_RES_DIR" ]]; then
-        output_warning "Resources directory not found: $ANDROID_RES_DIR"
+        output_warning "$(android_i18n_printf "res_dir_not_found" "$ANDROID_RES_DIR")"
         return 0
     fi
     
@@ -68,7 +119,7 @@ android_compile_resources() {
     local total=${#resource_files[@]}
     
     if [[ $total -eq 0 ]]; then
-        output_warning "No resource files found"
+        output_warning "$(android_i18n_get "no_resource_files_found")"
         return 0
     fi
     
@@ -83,7 +134,7 @@ android_compile_resources() {
         if "$aapt2" compile -o "$ANDROID_COMPILED_RES_DIR" "$res_file" 2>/dev/null; then
             ((success++))
         else
-            output_debug "Failed: $res_file"
+            output_debug "$(android_i18n_printf "failed_compile_resource" "$res_file")"
             ((failed++))
         fi
         output_progress_update
@@ -100,15 +151,15 @@ android_compile_resources() {
 }
 
 android_link_resources() {
-    output_section "Linking resources"
+    output_section "$(android_i18n_get "linking_resources")"
     
     local aapt2
     aapt2=$(android_get_aapt2) || return 1
     
-    local manifest="${ANDROID_MANIFEST}"
+    local manifest="${ANDROID_PROCESSED_MANIFEST:-${ANDROID_MANIFEST}}"
     
     if [[ ! -f "$manifest" ]]; then
-        output_error "AndroidManifest.xml not found: $manifest"
+        output_error "$(android_i18n_printf "manifest_not_found_path" "$manifest")"
         return 1
     fi
     
@@ -116,7 +167,7 @@ android_link_resources() {
     android_jar=$(android_get_android_jar)
     
     if [[ -z "$android_jar" ]]; then
-        output_error "android.jar not found for platform ${ANDROID_COMPILE_SDK}"
+        output_error "$(android_i18n_printf "android_jar_not_found" "${ANDROID_COMPILE_SDK}")"
         return 1
     fi
     
@@ -144,14 +195,14 @@ android_link_resources() {
         link_opts+=("${flat_files[@]}")
     fi
     
-    output_debug "Running: aapt2 link"
+    output_debug "$(android_i18n_get "linking_resources")"
     
     if ! "$aapt2" "${link_opts[@]}" 2>&1; then
-        output_error "Failed to link resources"
+        output_error "$(android_i18n_get "resource_link_failed")"
         return 1
     fi
     
-    output_success "Resources linked: $output_ap"
+    output_success "$(android_i18n_printf "resources_linked" "$output_ap")"
     
     local r_java_files=()
     while IFS= read -r -d '' file; do
@@ -159,7 +210,7 @@ android_link_resources() {
     done < <(find "$ANDROID_GENERATED_R_DIR" -name "R.java" -print0 2>/dev/null)
     
     if [[ ${#r_java_files[@]} -gt 0 ]]; then
-        output_success "Generated R.java: ${#r_java_files[@]} file(s)"
+        output_success "$(android_i18n_printf "generated_r_java" "${#r_java_files[@]}")"
     fi
     
     return 0
@@ -175,11 +226,11 @@ android_merge_resources() {
         return 0
     fi
     
-    output_debug "Merging dependency resources"
+    output_debug "$(android_i18n_get "merging_dep_resources")"
     
     for res_dir in "${dep_res_dirs[@]}"; do
         if [[ -d "$res_dir" ]]; then
-            output_debug "Merging: $res_dir"
+            output_debug "$(android_i18n_printf "merging" "$res_dir")"
         fi
     done
     
@@ -221,6 +272,7 @@ android_resources_clean() {
 }
 
 android_process_resources() {
+    android_process_manifest || return 1
     android_compile_resources || return 1
     android_link_resources || return 1
     return 0

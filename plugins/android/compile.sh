@@ -106,11 +106,11 @@ android_compile_java() {
     local total=${#java_files[@]}
     
     if [[ $total -eq 0 ]]; then
-        output_warning "No Java source files found"
+        output_warning "$(android_i18n_get "no_java_sources_found")"
         return 0
     fi
     
-    output_info "$(android_i18n_get "java_compiling"): $total files"
+    output_info "$(android_i18n_printf "compiling_files" "$total")"
     
     local classpath
     classpath=$(android_build_classpath)
@@ -172,7 +172,7 @@ android_compile_java() {
         return 1
     fi
     
-    output_success "$(android_i18n_get "compile_complete"): $success files"
+    output_success "$(android_i18n_printf "compile_success_files" "$success")"
     return 0
 }
 
@@ -180,7 +180,7 @@ android_compile_kotlin() {
     output_section "$(android_i18n_get "kotlin_compiling")"
     
     if [[ "${ANDROID_KOTLIN_ENABLED:-false}" != "true" ]]; then
-        output_debug "Kotlin compilation disabled"
+        output_debug "$(android_i18n_get "kotlin_compilation_disabled")"
         return 0
     fi
     
@@ -188,7 +188,7 @@ android_compile_kotlin() {
     kotlinc=$(android_get_kotlinc)
     
     if [[ -z "$kotlinc" ]]; then
-        output_warning "kotlinc not found, skipping Kotlin compilation"
+        output_warning "$(android_i18n_get "kotlinc_not_found_skip")"
         return 0
     fi
     
@@ -205,11 +205,11 @@ android_compile_kotlin() {
     local total=${#kotlin_files[@]}
     
     if [[ $total -eq 0 ]]; then
-        output_debug "No Kotlin source files found"
+        output_debug "$(android_i18n_get "no_kotlin_sources_found")"
         return 0
     fi
     
-    output_info "$(android_i18n_get "kotlin_compiling"): $total files"
+    output_info "$(android_i18n_printf "compiling_files" "$total")"
     
     local classpath
     classpath=$(android_build_classpath)
@@ -229,7 +229,7 @@ android_compile_kotlin() {
     fi
     
     if "$kotlinc" "${kotlinc_opts[@]}" "${kotlin_files[@]}" 2>&1; then
-        output_success "$(android_i18n_get "compile_complete"): $total Kotlin files"
+        output_success "$(android_i18n_printf "compile_kotlin_success" "$total")"
         return 0
     else
         output_error "$(android_i18n_get "compile_failed")"

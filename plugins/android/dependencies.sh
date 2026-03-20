@@ -72,7 +72,7 @@ android_download_dependency() {
     IFS='|' read -r group artifact version <<< "$(android_maven_parse_coord "$coord")"
     
     if [[ -z "$group" ]] || [[ -z "$artifact" ]] || [[ -z "$version" ]]; then
-        output_error "Invalid dependency coordinate: $coord"
+        output_error "$(android_i18n_printf "invalid_dep_coord" "$coord")"
         return 1
     fi
     
@@ -84,7 +84,7 @@ android_download_dependency() {
     local cache_file="${ANDROID_DEPS_CACHE_DIR}/${dep_path}.${type}"
     
     if [[ -f "$cache_file" ]]; then
-        output_debug "Cache hit: $coord"
+        output_debug "$(android_i18n_printf "cache_hit_coord" "$coord")"
         ANDROID_DEP_PATHS["$coord"]="$cache_file"
         return 0
     fi
@@ -96,7 +96,7 @@ android_download_dependency() {
     for repo in "${ANDROID_REPOSITORIES[@]}"; do
         local url="${repo}/${dep_path}.${type}"
         
-        output_debug "Trying: $url"
+        output_debug "$(android_i18n_printf "trying_url" "$url")"
         
         if android_download_file "$url" "$cache_file"; then
             if [[ -f "$cache_file" ]] && [[ -s "$cache_file" ]]; then
@@ -117,7 +117,7 @@ android_extract_aar() {
     local output_dir="$2"
     
     if [[ ! -f "$aar_file" ]]; then
-        output_error "AAR file not found: $aar_file"
+        output_error "$(android_i18n_printf "aar_not_found" "$aar_file")"
         return 1
     fi
     
@@ -138,7 +138,7 @@ android_extract_jar() {
     local output_dir="$2"
     
     if [[ ! -f "$jar_file" ]]; then
-        output_error "JAR file not found: $jar_file"
+        output_error "$(android_i18n_printf "jar_not_found" "$jar_file")"
         return 1
     fi
     
@@ -172,7 +172,7 @@ android_process_aar() {
     local extract_dir="${ANDROID_DEPS_DIR}/${artifact}-${version}"
     
     if [[ -d "$extract_dir" ]]; then
-        output_debug "Already extracted: $coord"
+        output_debug "$(android_i18n_printf "already_extracted_coord" "$coord")"
         return 0
     fi
     
@@ -205,7 +205,7 @@ android_process_jar() {
     local extract_dir="${ANDROID_DEPS_DIR}/${artifact}-${version}"
     
     if [[ -d "$extract_dir" ]]; then
-        output_debug "Already extracted: $coord"
+        output_debug "$(android_i18n_printf "already_extracted_coord" "$coord")"
         return 0
     fi
     
@@ -267,10 +267,10 @@ android_resolve_all_dependencies() {
         fi
     done
     
-    output_info "Dependencies: $success/$total resolved"
+    output_info "$(android_i18n_printf "deps_resolved_count" "$success" "$total")"
     
     if [[ $failed -gt 0 ]]; then
-        output_warning "$failed dependencies failed to resolve"
+        output_warning "$(android_i18n_printf "deps_failed_count" "$failed")"
         return 1
     fi
     
@@ -346,10 +346,10 @@ android_get_res_dirs() {
 }
 
 android_deps_list() {
-    output_section "Resolved Dependencies"
+    output_section "$(android_i18n_get "resolved_deps")"
     
     if [[ ${#ANDROID_RESOLVED_DEPS[@]} -eq 0 ]]; then
-        output_info "No dependencies resolved"
+        output_info "$(android_i18n_get "no_deps_resolved")"
         return 0
     fi
     
@@ -362,7 +362,7 @@ android_deps_list() {
 
 android_deps_clean() {
     if [[ -d "$ANDROID_DEPS_DIR" ]]; then
-        output_info "Cleaning dependencies directory"
+        output_info "$(android_i18n_get "cleaning_deps_dir")"
         rm -rf "$ANDROID_DEPS_DIR"
     fi
 }

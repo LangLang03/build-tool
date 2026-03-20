@@ -78,11 +78,11 @@ android_dex_classes() {
     done
     
     if [[ ${#inputs[@]} -eq 0 ]]; then
-        output_warning "No class files found to convert to DEX"
+        output_warning "$(android_i18n_get "no_class_files_dex")"
         return 0
     fi
     
-    output_debug "Running d8 with ${#inputs[@]} inputs"
+    output_debug "$(android_i18n_printf "running_d8_inputs" "${#inputs[@]}")"
     
     if "$d8" "${d8_opts[@]}" "${inputs[@]}" 2>&1; then
         output_success "$(android_i18n_get "dex_complete")"

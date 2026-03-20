@@ -27,7 +27,7 @@ android_get_apksigner() {
         fi
     fi
     
-    output_error "apksigner not found in build-tools/${ANDROID_BUILD_TOOLS}"
+    output_error "$(android_i18n_printf "apksigner_not_found" "$ANDROID_BUILD_TOOLS")"
     return 1
 }
 
@@ -49,7 +49,7 @@ android_create_debug_keystore() {
     android_signing_init
     
     if [[ -f "$ANDROID_DEBUG_KEYSTORE" ]]; then
-        output_debug "Debug keystore already exists"
+        output_debug "$(android_i18n_get "debug_keystore_exists")"
         return 0
     fi
     
@@ -57,11 +57,11 @@ android_create_debug_keystore() {
     keytool=$(android_get_keytool)
     
     if [[ -z "$keytool" ]]; then
-        output_error "keytool not found"
+        output_error "$(android_i18n_get "keytool_not_found")"
         return 1
     fi
     
-    output_info "Creating debug keystore..."
+    output_info "$(android_i18n_get "creating_debug_keystore")"
     
     ensure_dir "$(dirname "$ANDROID_DEBUG_KEYSTORE")"
     
@@ -79,10 +79,10 @@ android_create_debug_keystore() {
         2>/dev/null
     
     if [[ -f "$ANDROID_DEBUG_KEYSTORE" ]]; then
-        output_success "Debug keystore created"
+        output_success "$(android_i18n_get "debug_keystore_created")"
         return 0
     else
-        output_error "Failed to create debug keystore"
+        output_error "$(android_i18n_get "debug_keystore_failed")"
         return 1
     fi
 }
@@ -101,12 +101,12 @@ android_sign_apk() {
     apksigner=$(android_get_apksigner) || return 1
     
     if [[ ! -f "$input_apk" ]]; then
-        output_error "Input APK not found: $input_apk"
+        output_error "$(android_i18n_printf "input_apk_not_found" "$input_apk")"
         return 1
     fi
     
     if [[ ! -f "$keystore" ]]; then
-        output_error "Keystore not found: $keystore"
+        output_error "$(android_i18n_printf "keystore_not_found" "$keystore")"
         return 1
     fi
     
@@ -163,8 +163,8 @@ android_sign_release() {
     local key_pass="${ANDROID_SIGNING_RELEASE[key_password]:-}"
     
     if [[ -z "$keystore" ]] || [[ ! -f "$keystore" ]]; then
-        output_error "Release keystore not configured or not found"
-        output_info "Configure signing in build.yaml:"
+        output_error "$(android_i18n_get "release_keystore_not_configured")"
+        output_info "$(android_i18n_get "configure_signing_yaml")"
         output_info "  android.signing.release.store_file: path/to/keystore"
         output_info "  android.signing.release.store_password: password"
         output_info "  android.signing.release.key_alias: alias"
@@ -190,17 +190,17 @@ android_verify_apk() {
     apksigner=$(android_get_apksigner) || return 1
     
     if [[ ! -f "$apk_file" ]]; then
-        output_error "APK not found: $apk_file"
+        output_error "$(android_i18n_printf "apk_not_found_path" "$apk_file")"
         return 1
     fi
     
-    output_info "Verifying APK signature..."
+    output_info "$(android_i18n_get "verifying_signature")"
     
     if "$apksigner" verify "$apk_file" 2>&1; then
-        output_success "APK signature verified"
+        output_success "$(android_i18n_get "signature_verified")"
         return 0
     else
-        output_error "APK signature verification failed"
+        output_error "$(android_i18n_get "signature_failed")"
         return 1
     fi
 }
@@ -209,7 +209,7 @@ android_get_apk_info() {
     local apk_file="$1"
     
     if [[ ! -f "$apk_file" ]]; then
-        output_error "APK not found: $apk_file"
+        output_error "$(android_i18n_printf "apk_not_found_path" "$apk_file")"
         return 1
     fi
     
@@ -218,15 +218,15 @@ android_get_apk_info() {
     local size_formatted
     size_formatted=$(android_format_apk_size "$size")
     
-    echo "APK Information:"
-    echo "  Path: $apk_file"
-    echo "  Size: $size_formatted"
+    echo "$(android_i18n_get "apk_info_header")"
+    echo "  $(android_i18n_get "apk_info_path"): $apk_file"
+    echo "  $(android_i18n_get "apk_info_size"): $size_formatted"
     
     local apksigner
     apksigner=$(android_get_apksigner 2>/dev/null)
     
     if [[ -n "$apksigner" ]]; then
-        echo "  Signature:"
+        echo "  $(android_i18n_get "apk_info_signature"):"
         "$apksigner" verify --print-certs "$apk_file" 2>/dev/null | head -5
     fi
 }
