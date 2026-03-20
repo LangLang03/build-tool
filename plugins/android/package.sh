@@ -47,7 +47,7 @@ android_package_apk() {
     
     output_info "$(android_i18n_get "extracting") resources..."
     
-    if ! unzip -q -o "$resource_ap" -d "$ANDROID_APK_TEMP_DIR" 2>/dev/null; then
+    if ! unzip -q -o "$resource_ap" -d "$ANDROID_APK_TEMP_DIR"; then
         output_error "Failed to extract resources"
         return 1
     fi
