@@ -5,11 +5,13 @@ _ANDROID_DEPS_LOADED=1
 
 declare -g ANDROID_DEPS_DIR=""
 declare -g ANDROID_DEPS_CACHE_DIR=""
+declare -g ANDROID_NO_CACHE="${ANDROID_NO_CACHE:-false}"
 
 declare -ga ANDROID_RESOLVED_DEPS=()
 declare -gA ANDROID_DEP_PATHS=()
 declare -gA ANDROID_DEP_POMS=()
 declare -gA ANDROID_DEP_RESOLVING=()
+declare -ga ANDROID_ALL_DEPS=()
 
 declare -ga ANDROID_EXCLUDED_DEPS=(
     "androidx.databinding:databinding-compiler"
@@ -87,14 +89,13 @@ android_maven_get_filename() {
 android_download_file() {
     local url="$1"
     local output="$2"
-    
-    local download_cmd
+    local timeout="${3:-15}"
     
     if command_exists curl; then
-        curl -fsSL -o "$output" "$url"
+        curl -fsSL --connect-timeout "$timeout" --max-time "$((timeout * 3))" -o "$output" "$url"
         return $?
     elif command_exists wget; then
-        wget -q -O "$output" "$url"
+        wget -q --timeout="$timeout" -O "$output" "$url"
         return $?
     else
         output_error "$(android_i18n_get "download_failed"): curl or wget required"
@@ -112,7 +113,7 @@ android_download_pom() {
     dep_path=$(android_maven_to_path "$coord")
     local pom_file="${ANDROID_DEPS_CACHE_DIR}/${dep_path}.pom"
     
-    if [[ -f "$pom_file" ]]; then
+    if [[ "$ANDROID_NO_CACHE" != "true" ]] && [[ -f "$pom_file" ]]; then
         ANDROID_DEP_POMS["$coord"]="$pom_file"
         return 0
     fi
@@ -251,7 +252,7 @@ android_download_dependency() {
     
     local cache_file="${ANDROID_DEPS_CACHE_DIR}/${dep_path}.${type}"
     
-    if [[ -f "$cache_file" ]]; then
+    if [[ "$ANDROID_NO_CACHE" != "true" ]] && [[ -f "$cache_file" ]]; then
         output_debug "$(android_i18n_printf "cache_hit_coord" "$coord")"
         ANDROID_DEP_PATHS["$coord"]="$cache_file"
         return 0
@@ -288,13 +289,13 @@ android_download_dependency_with_fallback() {
     local cache_file_aar="${ANDROID_DEPS_CACHE_DIR}/$(android_maven_to_path "$coord").aar"
     local cache_file_jar="${ANDROID_DEPS_CACHE_DIR}/$(android_maven_to_path "$coord").jar"
     
-    if [[ -f "$cache_file_aar" ]]; then
+    if [[ "$ANDROID_NO_CACHE" != "true" ]] && [[ -f "$cache_file_aar" ]]; then
         output_debug "$(android_i18n_printf "cache_hit_coord" "$coord")"
         ANDROID_DEP_PATHS["$coord"]="$cache_file_aar"
         return 0
     fi
     
-    if [[ -f "$cache_file_jar" ]]; then
+    if [[ "$ANDROID_NO_CACHE" != "true" ]] && [[ -f "$cache_file_jar" ]]; then
         output_debug "$(android_i18n_printf "cache_hit_coord" "$coord")"
         ANDROID_DEP_PATHS["$coord"]="$cache_file_jar"
         return 0
@@ -428,17 +429,17 @@ android_resolve_dependency() {
     local key="${group}:${artifact}"
     
     if [[ "$group" == *"*"* ]] || [[ "$artifact" == *"*"* ]] || [[ "$version" == *"*"* ]]; then
-        output_debug "$(android_i18n_get "deps_wildcard"): $coord"
+        output_debug "$(android_i18n_printf "deps_wildcard" "$coord")"
         return 0
     fi
     
     if [[ -n "${ANDROID_DEP_RESOLVING[$key]:-}" ]]; then
-        output_debug "$(android_i18n_get "deps_circular"): $coord"
+        output_debug "$(android_i18n_printf "deps_circular" "$coord")"
         return 0
     fi
     
     if android_is_dep_excluded "$coord"; then
-        output_debug "$(android_i18n_get "deps_excluded"): $coord"
+        output_debug "$(android_i18n_printf "deps_excluded" "$coord")"
         return 0
     fi
     
@@ -492,6 +493,92 @@ android_resolve_dependency() {
     return 1
 }
 
+android_analyze_dependency_tree() {
+    local coord="$1"
+    local depth="${2:-0}"
+    
+    local group artifact version
+    IFS=':' read -r group artifact version <<< "$coord"
+    local key="${group}:${artifact}"
+    
+    if [[ "$group" == *"*"* ]] || [[ "$artifact" == *"*"* ]] || [[ "$version" == *"*"* ]]; then
+        return 0
+    fi
+    
+    if [[ -n "${ANDROID_DEP_RESOLVING[$key]:-}" ]]; then
+        return 0
+    fi
+    
+    if android_is_dep_excluded "$coord"; then
+        return 0
+    fi
+    
+    if arr_contains "$coord" "${ANDROID_ALL_DEPS[@]}"; then
+        return 0
+    fi
+    
+    ANDROID_DEP_RESOLVING["$key"]="1"
+    ANDROID_ALL_DEPS+=("$coord")
+    
+    local count=${#ANDROID_ALL_DEPS[@]}
+    output_debug "[$count] $(android_i18n_get "deps_analyzing"): $coord"
+    
+    android_download_pom "$coord" 2>/dev/null || true
+    local pom_file="${ANDROID_DEP_POMS[$coord]:-}"
+    
+    if [[ -n "$pom_file" ]] && [[ -f "$pom_file" ]]; then
+        while IFS= read -r dep; do
+            if [[ -n "$dep" ]] && [[ "$dep" != *'$'* ]]; then
+                android_analyze_dependency_tree "$dep" $((depth + 1)) || true
+            fi
+        done < <(android_parse_pom_dependencies "$pom_file")
+    fi
+    
+    unset "ANDROID_DEP_RESOLVING[$key]"
+}
+
+android_download_single_dep() {
+    local coord="$1"
+    local cache_dir="$2"
+    local repos_file="$3"
+    
+    local group artifact version
+    IFS=':' read -r group artifact version <<< "$coord"
+    
+    local dep_path
+    dep_path=$(android_maven_to_path "$coord")
+    
+    local aar_file="${cache_dir}/${dep_path}.aar"
+    local jar_file="${cache_dir}/${dep_path}.jar"
+    
+    if [[ -f "$aar_file" ]] || [[ -f "$jar_file" ]]; then
+        echo "CACHED: $coord"
+        return 0
+    fi
+    
+    while IFS= read -r repo; do
+        [[ -z "$repo" ]] && continue
+        
+        local aar_url="${repo}/${dep_path}.aar"
+        local jar_url="${repo}/${dep_path}.jar"
+        
+        if curl -fsSL --connect-timeout 10 -o "$aar_file" "$aar_url" 2>/dev/null && [[ -s "$aar_file" ]]; then
+            echo "DOWNLOADED: $coord (aar from $repo)"
+            return 0
+        fi
+        rm -f "$aar_file"
+        
+        if curl -fsSL --connect-timeout 10 -o "$jar_file" "$jar_url" 2>/dev/null && [[ -s "$jar_file" ]]; then
+            echo "DOWNLOADED: $coord (jar from $repo)"
+            return 0
+        fi
+        rm -f "$jar_file"
+    done < "$repos_file"
+    
+    echo "FAILED: $coord"
+    return 1
+}
+
 android_resolve_all_dependencies() {
     output_section "$(android_i18n_get "deps_resolving")"
     
@@ -501,34 +588,107 @@ android_resolve_all_dependencies() {
     ANDROID_DEP_PATHS=()
     ANDROID_DEP_POMS=()
     ANDROID_DEP_RESOLVING=()
+    ANDROID_ALL_DEPS=()
     
-    local total=0
-    local success=0
-    local failed=0
+    output_info "$(android_i18n_get "deps_analyzing_tree")"
     
     for dep in "${ANDROID_DEPS_IMPLEMENTATION[@]}"; do
-        ((total++))
-        if android_resolve_dependency "$dep" "implementation"; then
-            ((success++))
-        else
-            ((failed++))
-        fi
+        android_analyze_dependency_tree "$dep" || true
     done
     
     for dep in "${ANDROID_DEPS_COMPILE_ONLY[@]}"; do
-        ((total++))
-        if android_resolve_dependency "$dep" "compile_only"; then
-            ((success++))
-        else
-            ((failed++))
+        android_analyze_dependency_tree "$dep" || true
+    done
+    
+    local total_deps=${#ANDROID_ALL_DEPS[@]}
+    output_info "$(android_i18n_printf "deps_tree_analyzed" "$total_deps")"
+    
+    if [[ $total_deps -eq 0 ]]; then
+        output_success "$(android_i18n_get "deps_resolved")"
+        return 0
+    fi
+    
+    output_info "$(android_i18n_printf "deps_parallel_download" "$PARALLEL_JOBS")"
+    
+    local repos_file="${ANDROID_BUILD_DIR}/.repos_list"
+    printf '%s\n' "${ANDROID_REPOSITORIES[@]}" > "$repos_file"
+    
+    local download_log="${ANDROID_BUILD_DIR}/.download_log"
+    > "$download_log"
+    
+    local pids=()
+    local running=0
+    local failed=0
+    
+    for coord in "${ANDROID_ALL_DEPS[@]}"; do
+        while [[ $running -ge $PARALLEL_JOBS ]]; do
+            for i in "${!pids[@]}"; do
+                if ! kill -0 "${pids[$i]}" 2>/dev/null; then
+                    wait "${pids[$i]}" || ((failed++))
+                    unset 'pids[$i]'
+                    ((running--))
+                fi
+            done
+            sleep 0.1
+        done
+        
+        (
+            result=$(android_download_single_dep "$coord" "$ANDROID_DEPS_CACHE_DIR" "$repos_file")
+            echo "$result" >> "$download_log"
+        ) &
+        pids+=($!)
+        ((running++))
+    done
+    
+    for pid in "${pids[@]}"; do
+        wait "$pid" || ((failed++))
+    done
+    
+    rm -f "$repos_file"
+    
+    local downloaded=0
+    local cached=0
+    local failed_count=0
+    local -a failed_deps=()
+    
+    while IFS= read -r line; do
+        case "$line" in
+            "DOWNLOADED:"*) ((downloaded++)) ;;
+            "CACHED:"*) ((cached++)) ;;
+            "FAILED:"*)
+                ((failed_count++))
+                failed_deps+=("${line#FAILED: }")
+                ;;
+        esac
+    done < "$download_log"
+    
+    rm -f "$download_log"
+    
+    for coord in "${ANDROID_ALL_DEPS[@]}"; do
+        local dep_path
+        dep_path=$(android_maven_to_path "$coord")
+        
+        local aar_file="${ANDROID_DEPS_CACHE_DIR}/${dep_path}.aar"
+        local jar_file="${ANDROID_DEPS_CACHE_DIR}/${dep_path}.jar"
+        
+        if [[ -f "$aar_file" ]]; then
+            ANDROID_DEP_PATHS["$coord"]="$aar_file"
+            android_process_aar "$coord"
+            ANDROID_RESOLVED_DEPS+=("$coord")
+        elif [[ -f "$jar_file" ]]; then
+            ANDROID_DEP_PATHS["$coord"]="$jar_file"
+            android_process_jar "$coord"
+            ANDROID_RESOLVED_DEPS+=("$coord")
         fi
     done
     
-    local resolved_total=${#ANDROID_RESOLVED_DEPS[@]}
-    output_info "$(android_i18n_printf "deps_transitive_resolved" "$resolved_total" "$total")"
+    output_info "$(android_i18n_printf "deps_download_summary" "$downloaded" "$cached" "$failed_count")"
     
-    if [[ $failed -gt 0 ]]; then
-        output_warning "$(android_i18n_printf "deps_failed_count" "$failed")"
+    if [[ $failed_count -gt 0 ]]; then
+        output_warning "$(android_i18n_printf "deps_failed_count" "$failed_count")"
+        for dep in "${failed_deps[@]}"; do
+            output_error "  - $dep"
+        done
         return 1
     fi
     
