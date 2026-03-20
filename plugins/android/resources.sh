@@ -185,7 +185,7 @@ android_compile_dependency_resources() {
             continue
         fi
         
-        output_debug "$(android_i18n_get "compiling_dep"): $dep_res_dir"
+        output_debug "$(android_i18n_printf "compiling_dep" "$dep_res_dir")"
         
         while IFS= read -r -d '' file; do
             ((total++))

@@ -135,12 +135,94 @@ android_download_pom() {
     return 1
 }
 
+declare -gA ANDROID_POM_PROPERTIES=()
+
+android_parse_pom_properties() {
+    local pom_file="$1"
+    
+    ANDROID_POM_PROPERTIES=()
+    
+    if [[ ! -f "$pom_file" ]]; then
+        return 0
+    fi
+    
+    local in_props=false
+    local prop_name=""
+    local prop_value=""
+    
+    while IFS= read -r line; do
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
+        
+        if [[ "$line" == "<properties>" ]]; then
+            in_props=true
+            continue
+        fi
+        
+        if [[ "$line" == "</properties>" ]]; then
+            in_props=false
+            continue
+        fi
+        
+        if $in_props; then
+            if [[ "$line" =~ ^\<([a-zA-Z0-9_.-]+)\>([^<]*)\</[a-zA-Z0-9_.-]+\>$ ]]; then
+                prop_name="${BASH_REMATCH[1]}"
+                prop_value="${BASH_REMATCH[2]}"
+                ANDROID_POM_PROPERTIES["$prop_name"]="$prop_value"
+            fi
+        fi
+        
+        if [[ "$line" =~ ^\<version\>([^<]*)\</version\>$ ]] && [[ "${BASH_REMATCH[1]}" != *'$'* ]]; then
+            local ver="${BASH_REMATCH[1]}"
+            if [[ -n "$ver" ]] && [[ ! "$ver" =~ ^\$\{ ]]; then
+                ANDROID_POM_PROPERTIES["project.version"]="$ver"
+            fi
+        fi
+    done < "$pom_file"
+}
+
+android_resolve_pom_property() {
+    local value="$1"
+    
+    if [[ "$value" != *'$'* ]]; then
+        echo "$value"
+        return 0
+    fi
+    
+    while [[ "$value" =~ \$\{([^}]+)\} ]]; do
+        local prop_name="${BASH_REMATCH[1]}"
+        local prop_value="${ANDROID_POM_PROPERTIES[$prop_name]:-}"
+        
+        if [[ -z "$prop_value" ]]; then
+            case "$prop_name" in
+                project.version|version)
+                    prop_value="${ANDROID_POM_PROPERTIES[project.version]:-}"
+                    ;;
+                project.groupId|groupId)
+                    prop_value="${ANDROID_POM_PROPERTIES[project.groupId]:-}"
+                    ;;
+            esac
+        fi
+        
+        if [[ -z "$prop_value" ]]; then
+            echo "$value"
+            return 1
+        fi
+        
+        value="${value/\$\{$prop_name\}/$prop_value}"
+    done
+    
+    echo "$value"
+}
+
 android_parse_pom_dependencies() {
     local pom_file="$1"
     
     if [[ ! -f "$pom_file" ]]; then
         return 0
     fi
+    
+    android_parse_pom_properties "$pom_file"
     
     local -a deps=()
     local in_dep=false
@@ -182,8 +264,13 @@ android_parse_pom_dependencies() {
         if [[ "$line" == "</dependency>" ]]; then
             in_dep=false
             if [[ -n "$group" ]] && [[ -n "$artifact" ]] && [[ -n "$version" ]] && ! $skip; then
-                if [[ -z "$scope" ]] || [[ "$scope" == "compile" ]] || [[ "$scope" == "runtime" ]]; then
-                    deps+=("${group}:${artifact}:${version}")
+                version=$(android_resolve_pom_property "$version")
+                if [[ "$version" != *'$'* ]] && [[ -n "$version" ]]; then
+                    if [[ -z "$scope" ]] || [[ "$scope" == "compile" ]] || [[ "$scope" == "runtime" ]]; then
+                        deps+=("${group}:${artifact}:${version}")
+                    fi
+                else
+                    output_debug "Skipping dependency ${group}:${artifact} with unresolved version: ${version}"
                 fi
             fi
             continue
@@ -563,13 +650,13 @@ android_download_single_dep() {
         local aar_url="${repo}/${dep_path}.aar"
         local jar_url="${repo}/${dep_path}.jar"
         
-        if curl -fsSL --connect-timeout 10 -o "$aar_file" "$aar_url" 2>/dev/null && [[ -s "$aar_file" ]]; then
+        if curl -sSL --connect-timeout 10 -o "$aar_file" "$aar_url" && [[ -s "$aar_file" ]]; then
             echo "DOWNLOADED: $coord (aar from $repo)"
             return 0
         fi
         rm -f "$aar_file"
         
-        if curl -fsSL --connect-timeout 10 -o "$jar_file" "$jar_url" 2>/dev/null && [[ -s "$jar_file" ]]; then
+        if curl -sSL --connect-timeout 10 -o "$jar_file" "$jar_url" && [[ -s "$jar_file" ]]; then
             echo "DOWNLOADED: $coord (jar from $repo)"
             return 0
         fi
