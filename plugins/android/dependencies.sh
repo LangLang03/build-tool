@@ -152,7 +152,8 @@ android_parse_pom_dependencies() {
     local skip=false
     
     while IFS= read -r line; do
-        line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
         
         if [[ "$line" == "<dependencies>" ]]; then
             in_deps=true
