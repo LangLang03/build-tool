@@ -212,9 +212,8 @@ android_download_cmdline_tools() {
     output_info "$(android_i18n_get "downloading")..."
     
     local download_cmd
-    local progress_flag="-#"
     if command_exists curl; then
-        download_cmd="curl ${progress_flag}fsSL -o"
+        download_cmd="curl -# -fL -o"
     elif command_exists wget; then
         download_cmd="wget -q --show-progress -O"
     else
