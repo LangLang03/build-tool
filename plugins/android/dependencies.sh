@@ -27,6 +27,7 @@ declare -ga ANDROID_EXCLUDED_SUFFIXES=(
     "-truth"
     "-test"
     "-testing"
+    "-samples"
 )
 
 android_deps_init() {
@@ -425,6 +426,11 @@ android_resolve_dependency() {
     local group artifact version
     IFS=':' read -r group artifact version <<< "$coord"
     local key="${group}:${artifact}"
+    
+    if [[ "$group" == *"*"* ]] || [[ "$artifact" == *"*"* ]] || [[ "$version" == *"*"* ]]; then
+        output_debug "$(android_i18n_get "deps_wildcard"): $coord"
+        return 0
+    fi
     
     if [[ -n "${ANDROID_DEP_RESOLVING[$key]:-}" ]]; then
         output_debug "$(android_i18n_get "deps_circular"): $coord"
