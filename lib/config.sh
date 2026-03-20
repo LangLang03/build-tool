@@ -387,19 +387,50 @@ config_validate() {
 config_template() {
     local template="$1"
     local result="$template"
+    local max_iterations=100
+    local iteration=0
     
     while [[ "$result" =~ \$\{([a-zA-Z_][a-zA-Z0-9_]*)\} ]]; do
+        ((iteration++))
+        if [[ $iteration -gt $max_iterations ]]; then
+            break
+        fi
+        
         local var="${BASH_REMATCH[1]}"
         local value
         value=$(config_get "$var" "")
-        result="${result//\$\{$var\}/$value}"
+        
+        if [[ -z "$value" ]]; then
+            result="${result//\$\{$var\}/}"
+        else
+            local new_result="${result//\$\{$var\}/$value}"
+            if [[ "$new_result" == "$result" ]]; then
+                break
+            fi
+            result="$new_result"
+        fi
     done
     
+    iteration=0
     while [[ "$result" =~ \$([a-zA-Z_][a-zA-Z0-9_]*) ]]; do
+        ((iteration++))
+        if [[ $iteration -gt $max_iterations ]]; then
+            break
+        fi
+        
         local var="${BASH_REMATCH[1]}"
         local value
         value=$(config_get "$var" "")
-        result="${result//\$$var/$value}"
+        
+        if [[ -z "$value" ]]; then
+            result="${result//\$$var/}"
+        else
+            local new_result="${result//\$$var/$value}"
+            if [[ "$new_result" == "$result" ]]; then
+                break
+            fi
+            result="$new_result"
+        fi
     done
     
     echo "$result"

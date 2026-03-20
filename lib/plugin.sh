@@ -384,8 +384,8 @@ run_clean_hooks() {
 
 declare_dependencies() {
     local deps=("$@")
-    PLUGIN_DEPENDENCIES="${PLUGIN_NAME:-unknown}"
-    PLUGIN_DEPENDENCIES[$PLUGIN_NAME]=$(IFS=','; echo "${deps[*]}")
+    local plugin_name="${PLUGIN_NAME:-unknown}"
+    PLUGIN_DEPENDENCIES["$plugin_name"]=$(IFS=','; echo "${deps[*]}")
 }
 
 plugin_create() {

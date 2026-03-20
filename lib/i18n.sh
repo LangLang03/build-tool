@@ -208,6 +208,11 @@ _i18n_init_strings() {
         ["no_packages_to_install"]="No packages to install"
         ["optional_tools"]="Optional Tools"
         ["recommended"]="Recommended"
+        ["parallel"]="Parallel"
+        ["jobs_value_required"]="--jobs requires a numeric value"
+        ["jobs_must_be_number"]="--jobs value must be a positive integer"
+        ["invalid_target_name"]="Invalid target name (must be alphanumeric with underscores)"
+        ["invalid_hook_name"]="Invalid hook name (must be alphanumeric with underscores)"
     )
 
     I18N_STRINGS_ZH=(
@@ -410,6 +415,11 @@ _i18n_init_strings() {
         ["no_packages_to_install"]="没有需要安装的包"
         ["optional_tools"]="可选工具"
         ["recommended"]="推荐"
+        ["parallel"]="并行"
+        ["jobs_value_required"]="--jobs 需要一个数值"
+        ["jobs_must_be_number"]="--jobs 的值必须是一个正整数"
+        ["invalid_target_name"]="无效的目标名称（必须是字母数字和下划线）"
+        ["invalid_hook_name"]="无效的钩子名称（必须是字母数字和下划线）"
     )
 }
 

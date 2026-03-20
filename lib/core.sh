@@ -44,8 +44,11 @@ build_cleanup() {
     trap - INT TERM
     
     if [[ ${#PARALLEL_PIDS[@]} -gt 0 ]]; then
-        for pid in "${PARALLEL_PIDS[@]}"; do
+        for entry in "${PARALLEL_PIDS[@]}"; do
+            local pid="${entry%%:*}"
+            local tmp_file="${entry#*:}"
             kill "$pid" 2>/dev/null
+            rm -f "$tmp_file" 2>/dev/null
         done
         PARALLEL_PIDS=()
     fi
@@ -241,7 +244,7 @@ execute_target() {
         end_time=$(date +%s)
         local duration=$((end_time - start_time))
         
-        output_success "$(i18n_get "target_completed"): $target"
+        output_success "$(i18n_get "target_completed"): $target ($(format_duration $duration))"
         ((BUILD_SUCCESS_COUNT++))
         BUILD_EXECUTED_TARGETS+=("$target")
         return 0
@@ -250,7 +253,7 @@ execute_target() {
         end_time=$(date +%s)
         local duration=$((end_time - start_time))
         
-        output_error "$(i18n_get "target_failed"): $target"
+        output_error "$(i18n_get "target_failed"): $target ($(format_duration $duration))"
         ((BUILD_FAIL_COUNT++))
         return 1
     fi
@@ -384,11 +387,14 @@ parallel_run() {
         parallel_wait_one
     done
     
+    local tmp_file
+    tmp_file=$(mktemp /tmp/build_parallel_XXXXXX 2>/dev/null || echo "/tmp/build_parallel_$$_$RANDOM")
+    
     (
         $func "${args[@]}"
-        echo $? > "/tmp/build_parallel_$$_$RANDOM"
+        echo $? > "$tmp_file"
     ) &
-    PARALLEL_PIDS+=($!)
+    PARALLEL_PIDS+=("$!:${tmp_file}")
 }
 
 parallel_wait_one() {
@@ -397,14 +403,25 @@ parallel_wait_one() {
     fi
     
     local pid
-    for pid in "${PARALLEL_PIDS[@]}"; do
+    local tmp_file
+    local entry
+    
+    for entry in "${PARALLEL_PIDS[@]}"; do
+        pid="${entry%%:*}"
+        tmp_file="${entry#*:}"
+        
         if ! kill -0 "$pid" 2>/dev/null; then
             wait "$pid"
             local status=$?
             
+            if [[ -f "$tmp_file" ]]; then
+                status=$(cat "$tmp_file" 2>/dev/null || echo $status)
+                rm -f "$tmp_file"
+            fi
+            
             local new_pids=()
-            for p in "${PARALLEL_PIDS[@]}"; do
-                [[ "$p" != "$pid" ]] && new_pids+=("$p")
+            for e in "${PARALLEL_PIDS[@]}"; do
+                [[ "$e" != "$entry" ]] && new_pids+=("$e")
             done
             PARALLEL_PIDS=("${new_pids[@]}")
             
@@ -412,8 +429,17 @@ parallel_wait_one() {
         fi
     done
     
-    wait "${PARALLEL_PIDS[0]}"
+    entry="${PARALLEL_PIDS[0]}"
+    pid="${entry%%:*}"
+    tmp_file="${entry#*:}"
+    
+    wait "$pid"
     local status=$?
+    
+    if [[ -f "$tmp_file" ]]; then
+        status=$(cat "$tmp_file" 2>/dev/null || echo $status)
+        rm -f "$tmp_file"
+    fi
     
     local new_pids=("${PARALLEL_PIDS[@]:1}")
     PARALLEL_PIDS=("${new_pids[@]}")

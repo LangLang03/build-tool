@@ -141,7 +141,19 @@ declare -gA PACKAGE_REMOVE_COMMANDS=(
     ["cpt"]="cpt remove"
 )
 
+declare -g PLATFORM_DETECTED=false
+
+platform_ensure_detected() {
+    if [[ "$PLATFORM_DETECTED" != "true" ]]; then
+        platform_detect
+    fi
+}
+
 platform_detect() {
+    if [[ "$PLATFORM_DETECTED" == "true" ]]; then
+        return 0
+    fi
+    PLATFORM_DETECTED=true
     PLATFORM_ARCH=$(uname -m)
     
     case "$PLATFORM_ARCH" in
@@ -355,6 +367,7 @@ require_commands() {
 }
 
 platform_install() {
+    platform_ensure_detected
     local packages=("$@")
     
     if [[ ${#packages[@]} -eq 0 ]]; then
@@ -399,6 +412,7 @@ platform_install() {
 }
 
 platform_update() {
+    platform_ensure_detected
     if [[ -z "$PLATFORM_PACKAGE_MANAGER" ]]; then
         echo "$(i18n_get "error"): $(i18n_get "no_package_manager_detected")" >&2
         return 1
@@ -433,6 +447,7 @@ platform_update() {
 }
 
 platform_search() {
+    platform_ensure_detected
     local query="$1"
     
     if [[ -z "$query" ]]; then
@@ -457,6 +472,7 @@ platform_search() {
 }
 
 platform_remove() {
+    platform_ensure_detected
     local packages=("$@")
     
     if [[ ${#packages[@]} -eq 0 ]]; then
@@ -498,6 +514,7 @@ platform_remove() {
 }
 
 platform_get_info() {
+    platform_ensure_detected
     echo "$(i18n_get "platform_info")"
     echo "  $(i18n_get "os"):              $PLATFORM_OS"
     echo "  $(i18n_get "distribution"):    $PLATFORM_DISTRO"
@@ -704,7 +721,5 @@ platform_install_yq() {
     output_error "$(i18n_get "yq_install_failed")"
     return 1
 }
-
-platform_detect
 
 fi

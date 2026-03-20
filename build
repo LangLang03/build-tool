@@ -178,7 +178,7 @@ show_config() {
     output_key_value "$(i18n_get "verbose")" "$(config_get VERBOSE)" 15
     output_key_value "$(i18n_get "quiet")" "$(config_get QUIET)" 15
     output_key_value "$(i18n_get "no_color")" "$(config_get COLOR)" 15
-    output_key_value "$(i18n_get "jobs")" "$(config_get PARALLEL)" 15
+    output_key_value "$(i18n_get "parallel")" "$(config_get PARALLEL)" 15
     output_key_value "$(i18n_get "jobs")" "$(config_get JOBS)" 15
     output_key_value "$(i18n_get "no_cache")" "$(config_get INCREMENTAL)" 15
     
@@ -402,6 +402,14 @@ parse_options() {
                 shift 2
                 ;;
             --jobs|-j)
+                if [[ -z "${2:-}" ]] || [[ "$2" == -* ]]; then
+                    output_error "$(i18n_get "jobs_value_required")"
+                    exit 1
+                fi
+                if ! [[ "$2" =~ ^[0-9]+$ ]]; then
+                    output_error "$(i18n_get "jobs_must_be_number")"
+                    exit 1
+                fi
                 config_set "JOBS" "$2"
                 PARALLEL_JOBS="$2"
                 shift 2

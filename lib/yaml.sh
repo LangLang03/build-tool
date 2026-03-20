@@ -157,6 +157,16 @@ yaml_delete() {
     yq eval -i "del(.${path})" "$file" 2>/dev/null
 }
 
+_yaml_is_safe_name() {
+    local name="$1"
+    [[ "$name" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]
+}
+
+_yaml_escape_path() {
+    local path="$1"
+    printf '%s' "$path" | sed "s/'/'\\\\''/g"
+}
+
 yaml_load_config() {
     local file="$1"
     
@@ -200,10 +210,18 @@ yaml_load_config() {
             fi
             
             if [[ -f "$full_path" ]]; then
+                if ! _yaml_is_safe_name "$target_name"; then
+                    output_warning "$(i18n_get "invalid_target_name"): $target_name"
+                    continue
+                fi
+                
+                local escaped_path
+                escaped_path=$(_yaml_escape_path "$full_path")
+                
                 register_target "$target_name" "$(i18n_get "custom_target"): $target_name" "custom_target_$target_name"
                 
                 eval "custom_target_${target_name}() {
-                    source '${full_path}'
+                    source '${escaped_path}'
                 }"
             else
                 output_warning "$(i18n_get "target_script_not_found"): $full_path"
@@ -233,10 +251,18 @@ yaml_load_config() {
             fi
             
             if [[ -f "$full_path" ]]; then
+                if ! _yaml_is_safe_name "$hook_name"; then
+                    output_warning "$(i18n_get "invalid_hook_name"): $hook_name"
+                    continue
+                fi
+                
+                local escaped_path
+                escaped_path=$(_yaml_escape_path "$full_path")
+                
                 register_hook "$hook_name" "yaml" "yaml_hook_${hook_name}"
                 
                 eval "yaml_hook_${hook_name}() {
-                    source '${full_path}'
+                    source '${escaped_path}'
                 }"
             fi
         fi
