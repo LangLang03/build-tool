@@ -14,13 +14,13 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        enableFullScreen();
-        
         TextView textView = new TextView(this);
         textView.setText("Hello, Android!");
         textView.setTextSize(24);
         textView.setGravity(android.view.Gravity.CENTER);
         setContentView(textView);
+        
+        enableFullScreen();
     }
     
     private void enableFullScreen() {
