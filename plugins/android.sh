@@ -6,6 +6,8 @@ PLUGIN_DESCRIPTION="Complete Android build system without Gradle"
 PLUGIN_DEPENDENCIES="java,javac"
 
 source "${SCRIPT_DIR}/plugins/android/i18n.sh"
+source "${SCRIPT_DIR}/plugins/android/tools.sh"
+source "${SCRIPT_DIR}/plugins/android/xml.sh"
 source "${SCRIPT_DIR}/plugins/android/sdk.sh"
 source "${SCRIPT_DIR}/plugins/android/dependencies.sh"
 source "${SCRIPT_DIR}/plugins/android/resources.sh"
@@ -13,6 +15,7 @@ source "${SCRIPT_DIR}/plugins/android/compile.sh"
 source "${SCRIPT_DIR}/plugins/android/dex.sh"
 source "${SCRIPT_DIR}/plugins/android/package.sh"
 source "${SCRIPT_DIR}/plugins/android/signing.sh"
+source "${SCRIPT_DIR}/plugins/android/lint.sh"
 
 declare -g ANDROID_PROJECT_DIR=""
 declare -g ANDROID_BUILD_DIR=""
@@ -103,6 +106,15 @@ android_config_load() {
         ANDROID_SIGNING_RELEASE[key_alias]=$(yaml_read_str "$config_file" "android.signing.release.key_alias" "")
         ANDROID_SIGNING_RELEASE[key_password]=$(yaml_read_str "$config_file" "android.signing.release.key_password" "")
     fi
+    
+    ANDROID_LINT_ENABLED=$(yaml_read_bool "$config_file" "android.lint.enabled" "true")
+    ANDROID_LINT_CHECKS=$(yaml_read_str "$config_file" "android.lint.checks" "all")
+    ANDROID_LINT_DISABLE=$(yaml_read_str "$config_file" "android.lint.disable" "")
+    ANDROID_LINT_FATAL=$(yaml_read_str "$config_file" "android.lint.fatal" "")
+    ANDROID_LINT_REPORT_FORMAT=$(yaml_read_str "$config_file" "android.lint.report_format" "html")
+    ANDROID_LINT_BASELINE_FILE=$(yaml_read_str "$config_file" "android.lint.baseline_file" "")
+    ANDROID_LINT_CONFIG_FILE=$(yaml_read_str "$config_file" "android.lint.config_file" "")
+    ANDROID_LINT_ABORT_ON_ERROR=$(yaml_read_bool "$config_file" "android.lint.abort_on_error" "false")
 }
 
 android_config_get() {
@@ -283,12 +295,14 @@ android_deps() {
 
 android_resources() {
     android_config_init
+    android_tools_ensure || return 1
     android_resolve_all_dependencies || return 1
     android_process_resources
 }
 
 android_compile() {
     android_config_init
+    android_tools_ensure || return 1
     android_resolve_all_dependencies || return 1
     android_process_resources || return 1
     android_compile_all
@@ -296,6 +310,7 @@ android_compile() {
 
 android_dex() {
     android_config_init
+    android_tools_ensure || return 1
     android_resolve_all_dependencies || return 1
     android_process_resources || return 1
     android_compile_all || return 1
@@ -304,6 +319,7 @@ android_dex() {
 
 android_package() {
     android_config_init
+    android_tools_ensure || return 1
     android_resolve_all_dependencies || return 1
     android_process_resources || return 1
     android_compile_all || return 1
@@ -339,14 +355,16 @@ android_build() {
     
     android_config_init
     
-    if ! android_check_java; then
+    if ! android_tools_check_before_build; then
         return 1
     fi
     
-    if ! android_detect_sdk; then
-        if ! android_setup_sdk; then
-            return 1
-        fi
+    if [[ "$ANDROID_LINT_ENABLED" == "true" ]]; then
+        android_lint_check || {
+            if [[ "$ANDROID_LINT_ABORT_ON_ERROR" == "true" ]]; then
+                return 1
+            fi
+        }
     fi
     
     android_resolve_all_dependencies || return 1
@@ -498,6 +516,10 @@ register_target "android:install" "Install APK to device" "android_install"
 register_target "android:run" "Run application on device" "android_run"
 register_target "android:info" "Show project information" "android_info"
 register_target "android:sdk-info" "Show Android SDK information" "android_sdk_info"
+register_target "android:tools" "Check and install required tools" "android_tools_list"
+register_target "android:lint" "Run lint check" "android_lint_check"
+register_target "android:lint-fix" "Auto-fix lint issues" "android_lint_fix"
+register_target "android:lint-baseline" "Create lint baseline file" "android_lint_baseline"
 
 register_hook "pre_build" "android" "android_config_init"
 

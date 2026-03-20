@@ -101,13 +101,58 @@ android_package_apk() {
     current_dir=$(pwd)
     cd "$ANDROID_APK_TEMP_DIR"
     
-    if ! zip -q -r "$unsigned_apk_abs" .; then
-        cd "$current_dir"
-        output_error "$(android_i18n_get "package_failed")"
-        return 1
+    local target_sdk="${ANDROID_TARGET_SDK:-21}"
+    local need_uncompressed_arsc=false
+    
+    if [[ $target_sdk -ge 30 ]]; then
+        need_uncompressed_arsc=true
+        output_debug "$(android_i18n_get "arsc_uncompressed_sdk30")"
+    fi
+    
+    if [[ "$need_uncompressed_arsc" == "true" ]]; then
+        local -a all_files=()
+        while IFS= read -r -d '' file; do
+            all_files+=("$file")
+        done < <(find . -type f -print0)
+        
+        local arsc_file=""
+        local -a other_files=()
+        
+        for file in "${all_files[@]}"; do
+            if [[ "$(basename "$file")" == "resources.arsc" ]]; then
+                arsc_file="$file"
+            else
+                other_files+=("$file")
+            fi
+        done
+        
+        if [[ -n "$arsc_file" ]]; then
+            zip -q -0 "$unsigned_apk_abs" "$arsc_file"
+        fi
+        
+        for file in "${other_files[@]}"; do
+            zip -q -g "$unsigned_apk_abs" "$file"
+        done
+    else
+        if ! zip -q -r "$unsigned_apk_abs" .; then
+            cd "$current_dir"
+            output_error "$(android_i18n_get "package_failed")"
+            return 1
+        fi
     fi
     
     cd "$current_dir"
+    
+    if [[ "$need_uncompressed_arsc" == "true" ]] && [[ -f "$ANDROID_UNSIGNED_APK" ]]; then
+        local aligned_temp="${ANDROID_UNSIGNED_APK}.aligned"
+        local zipalign
+        zipalign=$(android_get_zipalign) || return 1
+        
+        "$zipalign" -f -p 4 "$ANDROID_UNSIGNED_APK" "$aligned_temp" 2>/dev/null
+        if [[ -f "$aligned_temp" ]]; then
+            mv "$aligned_temp" "$ANDROID_UNSIGNED_APK"
+        fi
+    fi
     
     rm -rf "$ANDROID_APK_TEMP_DIR"
     
@@ -118,6 +163,7 @@ android_package_apk() {
 android_zipalign_apk() {
     local input_apk="$1"
     local output_apk="$2"
+    local alignment="${3:-4}"
     
     local zipalign
     zipalign=$(android_get_zipalign) || return 1
@@ -127,12 +173,61 @@ android_zipalign_apk() {
         return 1
     fi
     
+    local target_sdk="${ANDROID_TARGET_SDK:-21}"
+    local need_strict_align=false
+    
+    if [[ $target_sdk -gt 30 ]]; then
+        need_strict_align=true
+        output_debug "$(android_i18n_printf "target_sdk_requires_alignment" "$target_sdk")"
+    fi
+    
     output_debug "$(android_i18n_get "aligning_apk")"
     
-    if "$zipalign" -f -v -p 4 "$input_apk" "$output_apk"; then
+    local align_opts=("-f" "-v")
+    
+    if [[ "$need_strict_align" == "true" ]]; then
+        align_opts+=("-p" "${alignment}")
+        output_info "$(android_i18n_printf "strict_alignment_enabled" "${alignment}")"
+    else
+        align_opts+=("-p" "${alignment}")
+    fi
+    
+    align_opts+=("$input_apk" "$output_apk")
+    
+    if "$zipalign" "${align_opts[@]}" 2>&1; then
+        if [[ "$need_strict_align" == "true" ]]; then
+            if "$zipalign" -c -v "${alignment}" "$output_apk" 2>&1 | grep -q "Verification successful"; then
+                output_debug "$(android_i18n_get "alignment_verified")"
+            else
+                output_warning "$(android_i18n_get "alignment_verification_failed")"
+            fi
+        fi
         return 0
     else
         output_error "$(android_i18n_get "zipalign_failed")"
+        return 1
+    fi
+}
+
+android_check_alignment() {
+    local apk_file="$1"
+    local alignment="${2:-4}"
+    
+    local zipalign
+    zipalign=$(android_get_zipalign) || return 1
+    
+    if [[ ! -f "$apk_file" ]]; then
+        output_error "$(android_i18n_printf "input_apk_not_found" "$apk_file")"
+        return 1
+    fi
+    
+    output_debug "$(android_i18n_get "verifying_alignment")"
+    
+    if "$zipalign" -c -v "${alignment}" "$apk_file" 2>&1 | grep -q "Verification successful"; then
+        output_success "$(android_i18n_get "alignment_ok")"
+        return 0
+    else
+        output_error "$(android_i18n_get "alignment_failed")"
         return 1
     fi
 }

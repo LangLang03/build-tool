@@ -36,32 +36,28 @@ android_process_manifest() {
     
     cp "$manifest" "$ANDROID_PROCESSED_MANIFEST"
     
-    local has_uses_sdk
-    has_uses_sdk=$(grep -c "<uses-sdk" "$ANDROID_PROCESSED_MANIFEST" 2>/dev/null || echo "0")
+    if ! android_xml_check_tool; then
+        output_warning "$(android_i18n_get "xml_tool_not_found_fallback")"
+    fi
     
-    if [[ "$has_uses_sdk" -eq 0 ]]; then
-        local uses_sdk_tag="    <uses-sdk android:minSdkVersion=\"${ANDROID_MIN_SDK}\" android:targetSdkVersion=\"${ANDROID_TARGET_SDK}\" />"
-        
-        local temp_file="${ANDROID_PROCESSED_MANIFEST}.tmp"
-        
-        if grep -q "</application>" "$ANDROID_PROCESSED_MANIFEST"; then
-            sed "s|</application>|${uses_sdk_tag}\n    </application>|" "$ANDROID_PROCESSED_MANIFEST" > "$temp_file"
-            mv "$temp_file" "$ANDROID_PROCESSED_MANIFEST"
-        else
-            sed "s|</manifest>|${uses_sdk_tag}\n</manifest>|" "$ANDROID_PROCESSED_MANIFEST" > "$temp_file"
-            mv "$temp_file" "$ANDROID_PROCESSED_MANIFEST"
-        fi
-        
+    if ! android_xml_element_exists "$ANDROID_PROCESSED_MANIFEST" "//uses-sdk"; then
+        android_manifest_ensure_uses_sdk "$ANDROID_PROCESSED_MANIFEST" "${ANDROID_MIN_SDK}" "${ANDROID_TARGET_SDK}"
         output_debug "$(android_i18n_printf "added_uses_sdk" "${ANDROID_MIN_SDK}" "${ANDROID_TARGET_SDK}")"
     else
-        if command_exists xmlstarlet; then
+        if [[ "$ANDROID_XML_TOOL" == "xmlstarlet" ]]; then
             xmlstarlet ed -L \
                 -u "//uses-sdk/@android:minSdkVersion" -v "${ANDROID_MIN_SDK}" \
                 -u "//uses-sdk/@android:targetSdkVersion" -v "${ANDROID_TARGET_SDK}" \
                 "$ANDROID_PROCESSED_MANIFEST" 2>/dev/null || true
+        else
+            android_manifest_set_min_sdk "$ANDROID_PROCESSED_MANIFEST" "${ANDROID_MIN_SDK}"
+            android_manifest_set_target_sdk "$ANDROID_PROCESSED_MANIFEST" "${ANDROID_TARGET_SDK}"
         fi
-        
         output_debug "$(android_i18n_get "updated_uses_sdk")"
+    fi
+    
+    if [[ "$ANDROID_XML_TOOL" == "xmlstarlet" ]] || [[ "$ANDROID_XML_TOOL" == "xmllint" ]]; then
+        android_xml_format "$ANDROID_PROCESSED_MANIFEST"
     fi
     
     output_success "$(android_i18n_get "manifest_processed")"
