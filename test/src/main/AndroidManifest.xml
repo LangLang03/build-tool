@@ -4,8 +4,7 @@
 
     <application
         android:label="Android Test"
-        android:allowBackup="true"
-        android:theme="@style/AppTheme">
+        android:allowBackup="true">
 
         <activity
             android:name=".MainActivity"
