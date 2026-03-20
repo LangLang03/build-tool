@@ -26,7 +26,7 @@ android_get_d8() {
         fi
     fi
     
-    output_error "d8 not found in build-tools/${ANDROID_BUILD_TOOLS}"
+    output_error "$(android_i18n_printf "tool_not_found" "d8" "$ANDROID_BUILD_TOOLS")"
     return 1
 }
 
@@ -39,7 +39,7 @@ android_dex_classes() {
     d8=$(android_get_d8) || return 1
     
     if [[ ! -d "$ANDROID_CLASSES_DIR" ]]; then
-        output_error "Classes directory not found: $ANDROID_CLASSES_DIR"
+        output_error "$(android_i18n_printf "classes_dir_not_found" "$ANDROID_CLASSES_DIR")"
         return 1
     fi
     
@@ -47,7 +47,7 @@ android_dex_classes() {
     class_count=$(android_count_class_files)
     
     if [[ $class_count -eq 0 ]]; then
-        output_warning "No class files to convert"
+        output_warning "$(android_i18n_get "no_class_files")"
         return 0
     fi
     
@@ -94,7 +94,7 @@ android_dex_jar() {
     d8=$(android_get_d8) || return 1
     
     if [[ ! -f "$jar_file" ]]; then
-        output_error "JAR file not found: $jar_file"
+        output_error "$(android_i18n_printf "jar_not_found" "$jar_file")"
         return 1
     fi
     
