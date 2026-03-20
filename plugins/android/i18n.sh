@@ -202,6 +202,9 @@ _android_init_i18n() {
         ["invalid_dep_coord"]="Invalid dependency coordinate: %s"
         ["deps_resolved_count"]="Dependencies: %s/%s resolved"
         ["deps_failed_count"]="%s dependencies failed to resolve"
+        ["deps_transitive_resolved"]="Dependencies: %s resolved (including transitive, %s direct)"
+        ["deps_circular"]="Circular dependency detected, skipping: %s"
+        ["deps_excluded"]="Excluded dependency, skipping: %s"
         ["resolved_deps"]="Resolved Dependencies"
         ["no_deps_resolved"]="No dependencies resolved"
         ["cleaning_deps_dir"]="Cleaning dependencies directory"
@@ -334,6 +337,10 @@ _android_init_i18n() {
         ["manifest_set_package"]="Set package: %s"
         ["manifest_set_version_name"]="Set versionName: %s"
         ["manifest_set_version_code"]="Set versionCode: %s"
+        
+        ["compiling_dep_resources"]="Compiling dependency resources"
+        ["compiling_dep"]="Compiling dependency: %s"
+        ["dep_resources_compiled"]="Dependency resources compiled: %s/%s"
     )
     
     ANDROID_I18N_ZH=(
@@ -530,6 +537,9 @@ _android_init_i18n() {
         ["invalid_dep_coord"]="无效的依赖坐标: %s"
         ["deps_resolved_count"]="依赖: %s/%s 已解析"
         ["deps_failed_count"]="%s 个依赖解析失败"
+        ["deps_transitive_resolved"]="依赖: %s 个已解析 (含传递依赖, 直接依赖 %s 个)"
+        ["deps_circular"]="检测到循环依赖，跳过: %s"
+        ["deps_excluded"]="排除的依赖，跳过: %s"
         ["resolved_deps"]="已解析的依赖"
         ["no_deps_resolved"]="没有已解析的依赖"
         ["cleaning_deps_dir"]="正在清理依赖目录"
@@ -661,6 +671,10 @@ _android_init_i18n() {
         ["manifest_set_package"]="设置包名: %s"
         ["manifest_set_version_name"]="设置版本名: %s"
         ["manifest_set_version_code"]="设置版本号: %s"
+        
+        ["compiling_dep_resources"]="正在编译依赖资源"
+        ["compiling_dep"]="正在编译依赖: %s"
+        ["dep_resources_compiled"]="依赖资源编译完成: %s/%s"
     )
     
     if [[ -n "${LANG:-}" ]]; then

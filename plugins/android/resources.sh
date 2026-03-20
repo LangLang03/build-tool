@@ -5,6 +5,7 @@ _ANDROID_RESOURCES_LOADED=1
 
 declare -g ANDROID_RES_DIR=""
 declare -g ANDROID_COMPILED_RES_DIR=""
+declare -g ANDROID_COMPILED_DEP_RES_DIR=""
 declare -g ANDROID_LINKED_RES_DIR=""
 declare -g ANDROID_GENERATED_R_DIR=""
 declare -g ANDROID_PROCESSED_MANIFEST=""
@@ -12,11 +13,13 @@ declare -g ANDROID_PROCESSED_MANIFEST=""
 android_resources_init() {
     ANDROID_RES_DIR="${ANDROID_SOURCE_DIR}/res"
     ANDROID_COMPILED_RES_DIR="${ANDROID_BUILD_DIR}/compiled_res"
+    ANDROID_COMPILED_DEP_RES_DIR="${ANDROID_BUILD_DIR}/compiled_dep_res"
     ANDROID_LINKED_RES_DIR="${ANDROID_BUILD_DIR}/linked"
     ANDROID_GENERATED_R_DIR="${ANDROID_BUILD_DIR}/generated/r"
     ANDROID_PROCESSED_MANIFEST="${ANDROID_BUILD_DIR}/processed/AndroidManifest.xml"
     
     ensure_dir "$ANDROID_COMPILED_RES_DIR"
+    ensure_dir "$ANDROID_COMPILED_DEP_RES_DIR"
     ensure_dir "$ANDROID_LINKED_RES_DIR"
     ensure_dir "$ANDROID_GENERATED_R_DIR"
     ensure_dir "$(dirname "$ANDROID_PROCESSED_MANIFEST")"
@@ -161,6 +164,53 @@ android_compile_resources() {
     return 0
 }
 
+android_compile_dependency_resources() {
+    local -a dep_res_dirs
+    read -ra dep_res_dirs <<< "$(android_get_res_dirs)"
+    
+    if [[ ${#dep_res_dirs[@]} -eq 0 ]]; then
+        return 0
+    fi
+    
+    output_info "$(android_i18n_get "compiling_dep_resources")"
+    
+    local aapt2
+    aapt2=$(android_get_aapt2) || return 1
+    
+    local total=0
+    local success=0
+    
+    for dep_res_dir in "${dep_res_dirs[@]}"; do
+        if [[ ! -d "$dep_res_dir" ]]; then
+            continue
+        fi
+        
+        output_debug "$(android_i18n_get "compiling_dep"): $dep_res_dir"
+        
+        while IFS= read -r -d '' file; do
+            ((total++))
+            if "$aapt2" compile -o "$ANDROID_COMPILED_DEP_RES_DIR" "$file" 2>/dev/null; then
+                ((success++))
+            else
+                output_debug "$(android_i18n_printf "failed_compile_resource" "$file")"
+            fi
+        done < <(find "$dep_res_dir" -type f \( \
+            -name "*.xml" -o \
+            -name "*.png" -o \
+            -name "*.jpg" -o \
+            -name "*.gif" -o \
+            -name "*.webp" -o \
+            -name "*.9.png" \
+        \) -print0 2>/dev/null)
+    done
+    
+    if [[ $total -gt 0 ]]; then
+        output_info "$(android_i18n_printf "dep_resources_compiled" "$success" "$total")"
+    fi
+    
+    return 0
+}
+
 android_link_resources() {
     output_section "$(android_i18n_get "linking_resources")"
     
@@ -186,6 +236,10 @@ android_link_resources() {
     while IFS= read -r -d '' file; do
         flat_files+=("$file")
     done < <(find "$ANDROID_COMPILED_RES_DIR" -name "*.flat" -print0 2>/dev/null)
+    
+    while IFS= read -r -d '' file; do
+        flat_files+=("$file")
+    done < <(find "$ANDROID_COMPILED_DEP_RES_DIR" -name "*.flat" -print0 2>/dev/null)
     
     ensure_dir "$ANDROID_LINKED_RES_DIR"
     ensure_dir "$ANDROID_GENERATED_R_DIR"
@@ -273,6 +327,10 @@ android_resources_clean() {
         rm -rf "$ANDROID_COMPILED_RES_DIR"
     fi
     
+    if [[ -d "$ANDROID_COMPILED_DEP_RES_DIR" ]]; then
+        rm -rf "$ANDROID_COMPILED_DEP_RES_DIR"
+    fi
+    
     if [[ -d "$ANDROID_LINKED_RES_DIR" ]]; then
         rm -rf "$ANDROID_LINKED_RES_DIR"
     fi
@@ -285,6 +343,7 @@ android_resources_clean() {
 android_process_resources() {
     android_process_manifest || return 1
     android_compile_resources || return 1
+    android_compile_dependency_resources || return 1
     android_link_resources || return 1
     return 0
 }

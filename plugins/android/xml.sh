@@ -365,7 +365,29 @@ android_manifest_set_package() {
     local manifest="$1"
     local package="$2"
     
-    android_xml_set_attr "$manifest" "/manifest" "package" "$package"
+    if [[ ! -f "$manifest" ]]; then
+        return 1
+    fi
+    
+    local current_package
+    current_package=$(android_manifest_read_package "$manifest")
+    
+    if [[ -n "$current_package" ]]; then
+        android_xml_set_attr "$manifest" "/manifest" "package" "$package"
+    else
+        case "$ANDROID_XML_TOOL" in
+            xmlstarlet)
+                xmlstarlet ed -L -i "/manifest" -t attr -n "package" -v "$package" "$manifest" 2>/dev/null
+                return $?
+                ;;
+            *)
+                local temp_file="${manifest}.tmp"
+                sed "s|<manifest |<manifest package=\"${package}\" |" "$manifest" > "$temp_file" 2>/dev/null && \
+                mv "$temp_file" "$manifest"
+                return $?
+                ;;
+        esac
+    fi
 }
 
 android_manifest_set_version_name() {

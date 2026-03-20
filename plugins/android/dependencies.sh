@@ -8,6 +8,18 @@ declare -g ANDROID_DEPS_CACHE_DIR=""
 
 declare -ga ANDROID_RESOLVED_DEPS=()
 declare -gA ANDROID_DEP_PATHS=()
+declare -gA ANDROID_DEP_POMS=()
+declare -gA ANDROID_DEP_RESOLVING=()
+
+declare -ga ANDROID_EXCLUDED_DEPS=(
+    "androidx.databinding:databinding-compiler"
+    "androidx.databinding:databinding-compiler-common"
+    "com.android.tools.build:aapt2"
+    "com.android.tools.build:builder"
+    "com.android.tools.build:gradle"
+    "com.android.tools.build:gradle-api"
+    "com.android.tools.build:manifest-merger"
+)
 
 android_deps_init() {
     ANDROID_DEPS_DIR="${ANDROID_BUILD_DIR}/dependencies"
@@ -62,6 +74,130 @@ android_download_file() {
         output_error "$(android_i18n_get "download_failed"): curl or wget required"
         return 1
     fi
+}
+
+android_download_pom() {
+    local coord="$1"
+    
+    local group artifact version
+    IFS='|' read -r group artifact version <<< "$(android_maven_parse_coord "$coord")"
+    
+    local dep_path
+    dep_path=$(android_maven_to_path "$coord")
+    local pom_file="${ANDROID_DEPS_CACHE_DIR}/${dep_path}.pom"
+    
+    if [[ -f "$pom_file" ]]; then
+        ANDROID_DEP_POMS["$coord"]="$pom_file"
+        return 0
+    fi
+    
+    ensure_dir "$(dirname "$pom_file")"
+    
+    for repo in "${ANDROID_REPOSITORIES[@]}"; do
+        local url="${repo}/${dep_path}.pom"
+        
+        if android_download_file "$url" "$pom_file"; then
+            if [[ -f "$pom_file" ]] && [[ -s "$pom_file" ]]; then
+                ANDROID_DEP_POMS["$coord"]="$pom_file"
+                return 0
+            fi
+            rm -f "$pom_file"
+        fi
+    done
+    
+    return 1
+}
+
+android_parse_pom_dependencies() {
+    local pom_file="$1"
+    
+    if [[ ! -f "$pom_file" ]]; then
+        return 0
+    fi
+    
+    local -a deps=()
+    local in_dep=false
+    local in_deps=false
+    local group=""
+    local artifact=""
+    local version=""
+    local scope=""
+    local skip=false
+    
+    while IFS= read -r line; do
+        line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        
+        if [[ "$line" == "<dependencies>" ]]; then
+            in_deps=true
+            continue
+        fi
+        
+        if [[ "$line" == "</dependencies>" ]]; then
+            in_deps=false
+            continue
+        fi
+        
+        if ! $in_deps; then
+            continue
+        fi
+        
+        if [[ "$line" == "<dependency>" ]]; then
+            in_dep=true
+            group=""
+            artifact=""
+            version=""
+            scope=""
+            skip=false
+            continue
+        fi
+        
+        if [[ "$line" == "</dependency>" ]]; then
+            in_dep=false
+            if [[ -n "$group" ]] && [[ -n "$artifact" ]] && [[ -n "$version" ]] && ! $skip; then
+                if [[ -z "$scope" ]] || [[ "$scope" == "compile" ]] || [[ "$scope" == "runtime" ]]; then
+                    deps+=("${group}:${artifact}:${version}")
+                fi
+            fi
+            continue
+        fi
+        
+        if $in_dep; then
+            if [[ "$line" =~ ^\<groupId\>([^<]+)\</groupId\>$ ]]; then
+                group="${BASH_REMATCH[1]}"
+            elif [[ "$line" =~ ^\<artifactId\>([^<]+)\</artifactId\>$ ]]; then
+                artifact="${BASH_REMATCH[1]}"
+            elif [[ "$line" =~ ^\<version\>([^<]+)\</version\>$ ]]; then
+                version="${BASH_REMATCH[1]}"
+            elif [[ "$line" =~ ^\<scope\>([^<]+)\</scope\>$ ]]; then
+                scope="${BASH_REMATCH[1]}"
+            elif [[ "$line" =~ ^\<optional\>([^<]+)\</optional\>$ ]]; then
+                if [[ "${BASH_REMATCH[1]}" == "true" ]]; then
+                    skip=true
+                fi
+            fi
+        fi
+    done < "$pom_file"
+    
+    for dep in "${deps[@]}"; do
+        echo "$dep"
+    done
+}
+
+android_is_dep_excluded() {
+    local coord="$1"
+    
+    local group artifact version
+    IFS=':' read -r group artifact version <<< "$coord"
+    
+    local key="${group}:${artifact}"
+    
+    for excluded in "${ANDROID_EXCLUDED_DEPS[@]}"; do
+        if [[ "$key" == "$excluded" ]]; then
+            return 0
+        fi
+    done
+    
+    return 1
 }
 
 android_download_dependency() {
@@ -217,25 +353,70 @@ android_process_jar() {
 android_resolve_dependency() {
     local coord="$1"
     local type="${2:-implementation}"
+    local depth="${3:-0}"
     
     if arr_contains "$coord" "${ANDROID_RESOLVED_DEPS[@]}"; then
         return 0
     fi
     
-    output_debug "$(android_i18n_get "deps_resolving"): $coord"
+    local group artifact version
+    IFS=':' read -r group artifact version <<< "$coord"
+    local key="${group}:${artifact}"
+    
+    if [[ -n "${ANDROID_DEP_RESOLVING[$key]:-}" ]]; then
+        output_debug "$(android_i18n_get "deps_circular"): $coord"
+        return 0
+    fi
+    
+    if android_is_dep_excluded "$coord"; then
+        output_debug "$(android_i18n_get "deps_excluded"): $coord"
+        return 0
+    fi
+    
+    ANDROID_DEP_RESOLVING["$key"]="1"
+    
+    local indent=""
+    for ((i=0; i<depth; i++)); do
+        indent+="  "
+    done
+    
+    output_debug "${indent}$(android_i18n_get "deps_resolving"): $coord"
+    
+    local downloaded=false
+    local pom_file=""
+    
+    android_download_pom "$coord" 2>/dev/null || true
+    pom_file="${ANDROID_DEP_POMS[$coord]:-}"
     
     if android_download_dependency "$coord" "aar" 2>/dev/null; then
         android_process_aar "$coord"
-        ANDROID_RESOLVED_DEPS+=("$coord")
-        return 0
-    fi
-    
-    if android_download_dependency "$coord" "jar" 2>/dev/null; then
+        downloaded=true
+    elif android_download_dependency "$coord" "jar" 2>/dev/null; then
         android_process_jar "$coord"
+        downloaded=true
+    fi
+    
+    if [[ "$downloaded" == "true" ]]; then
         ANDROID_RESOLVED_DEPS+=("$coord")
+        
+        if [[ -n "$pom_file" ]] && [[ -f "$pom_file" ]]; then
+            local -a transitive_deps
+            while IFS= read -r dep; do
+                if [[ -n "$dep" ]] && [[ "$dep" != *'$'* ]]; then
+                    transitive_deps+=("$dep")
+                fi
+            done < <(android_parse_pom_dependencies "$pom_file")
+            
+            for trans_dep in "${transitive_deps[@]}"; do
+                android_resolve_dependency "$trans_dep" "implementation" $((depth + 1)) || true
+            done
+        fi
+        
+        unset "ANDROID_DEP_RESOLVING[$key]"
         return 0
     fi
     
+    unset "ANDROID_DEP_RESOLVING[$key]"
     output_error "$(android_i18n_get "deps_failed"): $coord"
     return 1
 }
@@ -244,6 +425,11 @@ android_resolve_all_dependencies() {
     output_section "$(android_i18n_get "deps_resolving")"
     
     android_deps_init
+    
+    ANDROID_RESOLVED_DEPS=()
+    ANDROID_DEP_PATHS=()
+    ANDROID_DEP_POMS=()
+    ANDROID_DEP_RESOLVING=()
     
     local total=0
     local success=0
@@ -267,7 +453,8 @@ android_resolve_all_dependencies() {
         fi
     done
     
-    output_info "$(android_i18n_printf "deps_resolved_count" "$success" "$total")"
+    local resolved_total=${#ANDROID_RESOLVED_DEPS[@]}
+    output_info "$(android_i18n_printf "deps_transitive_resolved" "$resolved_total" "$total")"
     
     if [[ $failed -gt 0 ]]; then
         output_warning "$(android_i18n_printf "deps_failed_count" "$failed")"
