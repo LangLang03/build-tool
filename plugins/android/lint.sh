@@ -86,7 +86,7 @@ android_lint_build_options() {
     if [[ -n "$ANDROID_LINT_FATAL" ]]; then
         local -a fatal_checks
         IFS=',' read -ra fatal_checks <<< "$ANDROID_LINT_FATAL"
-        for check in "${fatal_checks[@]}"; then
+        for check in "${fatal_checks[@]}"; do
             opts+=("--fatalcheck" "$check")
         done
     fi

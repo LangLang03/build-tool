@@ -40,6 +40,21 @@ android_process_manifest() {
         output_warning "$(android_i18n_get "xml_tool_not_found_fallback")"
     fi
     
+    if [[ -n "${ANDROID_APPLICATION_ID:-}" ]]; then
+        android_manifest_set_package "$ANDROID_PROCESSED_MANIFEST" "${ANDROID_APPLICATION_ID}"
+        output_debug "$(android_i18n_printf "manifest_set_package" "${ANDROID_APPLICATION_ID}")"
+    fi
+    
+    if [[ -n "${ANDROID_VERSION_NAME:-}" ]]; then
+        android_manifest_set_version_name "$ANDROID_PROCESSED_MANIFEST" "${ANDROID_VERSION_NAME}"
+        output_debug "$(android_i18n_printf "manifest_set_version_name" "${ANDROID_VERSION_NAME}")"
+    fi
+    
+    if [[ -n "${ANDROID_VERSION_CODE:-}" ]]; then
+        android_manifest_set_version_code "$ANDROID_PROCESSED_MANIFEST" "${ANDROID_VERSION_CODE}"
+        output_debug "$(android_i18n_printf "manifest_set_version_code" "${ANDROID_VERSION_CODE}")"
+    fi
+    
     if ! android_xml_element_exists "$ANDROID_PROCESSED_MANIFEST" "//uses-sdk"; then
         android_manifest_ensure_uses_sdk "$ANDROID_PROCESSED_MANIFEST" "${ANDROID_MIN_SDK}" "${ANDROID_TARGET_SDK}"
         output_debug "$(android_i18n_printf "added_uses_sdk" "${ANDROID_MIN_SDK}" "${ANDROID_TARGET_SDK}")"

@@ -330,6 +330,10 @@ _android_init_i18n() {
         ["lint_no_issues_fix"]="No issues to fix"
         
         ["arsc_uncompressed_sdk30"]="Target SDK >= 30, resources.arsc will be stored uncompressed"
+        
+        ["manifest_set_package"]="Set package: %s"
+        ["manifest_set_version_name"]="Set versionName: %s"
+        ["manifest_set_version_code"]="Set versionCode: %s"
     )
     
     ANDROID_I18N_ZH=(
@@ -653,6 +657,10 @@ _android_init_i18n() {
         ["lint_disabled"]="Lint 检查已禁用"
         ["lint_no_issues_fix"]="没有需要修复的问题"
         ["arsc_uncompressed_sdk30"]="目标 SDK >= 30，resources.arsc 将以未压缩方式存储"
+        
+        ["manifest_set_package"]="设置包名: %s"
+        ["manifest_set_version_name"]="设置版本名: %s"
+        ["manifest_set_version_code"]="设置版本号: %s"
     )
     
     if [[ -n "${LANG:-}" ]]; then
