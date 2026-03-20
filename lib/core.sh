@@ -87,22 +87,117 @@ register_target_deps() {
 
 target_exists() {
     local name="$1"
-    [[ -n "${BUILD_TARGETS[$name]:-}" ]]
+    
+    if [[ -n "${BUILD_TARGETS[$name]:-}" ]]; then
+        return 0
+    fi
+    
+    if [[ "$name" == *":"* ]]; then
+        return 1
+    fi
+    
+    for target_name in "${!BUILD_TARGETS[@]}"; do
+        if [[ "$target_name" == *":"* ]]; then
+            local target_suffix="${target_name#*:}"
+            if [[ "$target_suffix" == "$name" ]]; then
+                return 0
+            fi
+        fi
+    done
+    
+    return 1
 }
 
 get_target_func() {
     local name="$1"
-    echo "${BUILD_TARGET_FUNC[$name]:-}"
+    
+    if [[ -n "${BUILD_TARGETS[$name]:-}" ]]; then
+        echo "${BUILD_TARGET_FUNC[$name]:-}"
+        return
+    fi
+    
+    if [[ "$name" != *":"* ]]; then
+        for target_name in "${!BUILD_TARGETS[@]}"; do
+            if [[ "$target_name" == *":"* ]]; then
+                local target_suffix="${target_name#*:}"
+                if [[ "$target_suffix" == "$name" ]]; then
+                    echo "${BUILD_TARGET_FUNC[$target_name]:-}"
+                    return
+                fi
+            fi
+        done
+    fi
+    
+    echo ""
 }
 
 get_target_deps() {
     local name="$1"
-    echo "${BUILD_TARGET_DEPS[$name]:-}"
+    
+    if [[ -n "${BUILD_TARGETS[$name]:-}" ]]; then
+        echo "${BUILD_TARGET_DEPS[$name]:-}"
+        return
+    fi
+    
+    if [[ "$name" != *":"* ]]; then
+        for target_name in "${!BUILD_TARGETS[@]}"; do
+            if [[ "$target_name" == *":"* ]]; then
+                local target_suffix="${target_name#*:}"
+                if [[ "$target_suffix" == "$name" ]]; then
+                    echo "${BUILD_TARGET_DEPS[$target_name]:-}"
+                    return
+                fi
+            fi
+        done
+    fi
+    
+    echo ""
 }
 
 get_target_desc() {
     local name="$1"
-    echo "${BUILD_TARGET_DESC[$name]:-}"
+    
+    if [[ -n "${BUILD_TARGETS[$name]:-}" ]]; then
+        echo "${BUILD_TARGET_DESC[$name]:-}"
+        return
+    fi
+    
+    if [[ "$name" != *":"* ]]; then
+        for target_name in "${!BUILD_TARGETS[@]}"; do
+            if [[ "$target_name" == *":"* ]]; then
+                local target_suffix="${target_name#*:}"
+                if [[ "$target_suffix" == "$name" ]]; then
+                    echo "${BUILD_TARGET_DESC[$target_name]:-}"
+                    return
+                fi
+            fi
+        done
+    fi
+    
+    echo ""
+}
+
+resolve_target_name() {
+    local name="$1"
+    
+    if [[ -n "${BUILD_TARGETS[$name]:-}" ]]; then
+        echo "$name"
+        return
+    fi
+    
+    if [[ "$name" != *":"* ]]; then
+        for target_name in "${!BUILD_TARGETS[@]}"; do
+            if [[ "$target_name" == *":"* ]]; then
+                local target_suffix="${target_name#*:}"
+                if [[ "$target_suffix" == "$name" ]]; then
+                    echo "$target_name"
+                    return
+                fi
+            fi
+        done
+    fi
+    
+    echo "$name"
 }
 
 list_targets() {
@@ -217,24 +312,28 @@ get_build_order() {
 execute_target() {
     local target="$1"
     
-    if ! target_exists "$target"; then
+    local resolved_target
+    resolved_target=$(resolve_target_name "$target")
+    
+    if ! target_exists "$resolved_target"; then
         output_error "$(i18n_get "unknown_target"): $target"
         return 1
     fi
     
-    if arr_contains "$target" "${BUILD_EXECUTED_TARGETS[@]}"; then
+    if arr_contains "$resolved_target" "${BUILD_EXECUTED_TARGETS[@]}"; then
         return 0
     fi
     
-    BUILD_CURRENT_TARGET="$target"
-    local func="${BUILD_TARGET_FUNC[$target]}"
+    BUILD_CURRENT_TARGET="$resolved_target"
+    local func
+    func=$(get_target_func "$resolved_target")
     
     if [[ -z "$func" ]] || ! declare -f "$func" &>/dev/null; then
-        output_error "$(i18n_get "target_no_implementation"): $target"
+        output_error "$(i18n_get "target_no_implementation"): $resolved_target"
         return 1
     fi
     
-    output_section "$(i18n_get "building_target"): $target"
+    output_section "$(i18n_get "building_target"): $resolved_target"
     
     local start_time
     start_time=$(date +%s)
@@ -244,16 +343,16 @@ execute_target() {
         end_time=$(date +%s)
         local duration=$((end_time - start_time))
         
-        output_success "$(i18n_get "target_completed"): $target ($(format_duration $duration))"
+        output_success "$(i18n_get "target_completed"): $resolved_target ($(format_duration $duration))"
         ((BUILD_SUCCESS_COUNT++))
-        BUILD_EXECUTED_TARGETS+=("$target")
+        BUILD_EXECUTED_TARGETS+=("$resolved_target")
         return 0
     else
         local end_time
         end_time=$(date +%s)
         local duration=$((end_time - start_time))
         
-        output_error "$(i18n_get "target_failed"): $target ($(format_duration $duration))"
+        output_error "$(i18n_get "target_failed"): $resolved_target ($(format_duration $duration))"
         ((BUILD_FAIL_COUNT++))
         return 1
     fi
@@ -262,13 +361,16 @@ execute_target() {
 execute_target_with_deps() {
     local target="$1"
     
-    if ! target_exists "$target"; then
+    local resolved_target
+    resolved_target=$(resolve_target_name "$target")
+    
+    if ! target_exists "$resolved_target"; then
         output_error "$(i18n_get "unknown_target"): $target"
         return 1
     fi
     
     local order
-    order=$(get_build_order "$target")
+    order=$(get_build_order "$resolved_target")
     
     if [[ $? -ne 0 ]]; then
         return 1
